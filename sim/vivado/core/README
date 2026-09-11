@@ -1,0 +1,128 @@
+📘 Vivado Simulation Environment — AXI‑Full Backend
+(Directory: parser_axi_full/sim/vivado/core/)
+
+Overview
+This directory contains the Vivado XSIM simulation environment for the AXI‑Full backend of the DexterLab parser system.
+
+The simulation validates:
+
+the AXI‑Full backend (cmd_axi_full.vhd)
+
+integration with the parser core (cmd_parser.vhd and related packages)
+
+AXI‑Full burst handling (INCR, FIFO, WRAP)
+
+multi‑beat write and read sequences
+
+AXI channel behavior (AW, W, B, AR, R)
+
+the complete AXI testbench (tb_axi.vhd)
+
+This README explains how to run the simulation.
+For architectural details and protocol documentation, refer to the main project documentation under docs/.
+
+Requirements
+Windows 10/11
+
+Vivado 2025.1 installed
+
+settings64.bat available in the Vivado installation directory
+
+MSYS2 / MINGW64 (optional, for Make)
+
+Environment Setup
+Before running any simulation, the Vivado environment must be activated.
+
+Run:
+
+Codice
+xsim_env.bat
+This script loads settings64.bat and prepares the Vivado toolchain (xvhdl, xelab, xsim).
+
+Running the Simulation
+Full simulation (compile + elaborate + run)
+Codice
+make xsim
+This performs:
+
+RTL compilation (xvhdl)
+
+Testbench compilation (xvhdl)
+
+Design elaboration (xelab)
+
+Batch simulation (xsim)
+
+The following files are generated:
+
+xsim.dir/ — XSIM working directory
+
+tb_axi_sim.wdb — waveform database
+
+xsim.log, xelab.log — log files
+
+Opening the GUI
+To open the XSIM waveform viewer:
+
+Codice
+make xsim_gui
+or manually:
+
+Codice
+xsim tb_axi_sim --gui
+The GUI requires:
+
+xsim.dir/
+
+tb_axi_sim.wdb
+
+Debug Logging
+Debug messages (severity note) are controlled by:
+
+vhdl
+constant ENABLE_DEBUG_LOG : boolean := false;
+located in:
+
+Codice
+cmd_cfg.vhd
+Debug OFF (default)
+suppresses all debug prints
+
+warnings, errors, and fatals remain active
+
+Debug ON
+Set:
+
+vhdl
+ENABLE_DEBUG_LOG := true;
+Vivado/XSIM does not support severity filtering, so debug control is implemented directly in VHDL.
+
+Cleaning the Directory
+To remove generated files:
+
+Codice
+make clean
+This clears:
+
+.Xil/
+
+xsim.dir/
+
+.log, .jou, .pb, .wdb files
+
+Additional Documentation
+For complete information about:
+
+parser architecture
+
+command semantics
+
+AXI‑Full protocol behavior
+
+burst/fifo/wrap handling
+
+integration guidelines
+
+refer to the documentation located in the docs/ directory of the parser_axi_full project.
+
+# End of Document

@@ -1,0 +1,157 @@
+INCLUDE init_var.txt
+
+WAIT_CLOCKS 5
+WAIT_TIME 10ns
+WAIT_SIM_TIME 450ns -- ma che cazzo
+
+SET_ATOMIC 1
+WSTRB_WRITE BASE_RAM 0x00000098 0b0001
+WSTRB_WRITE BASE_RAM 0x0000BA00 0b0010
+WSTRB_WRITE BASE_RAM 0x00DC0000 0b0100
+WSTRB_WRITE BASE_RAM 0xFE000000 0b1000
+READ  BASE_RAM
+CHECK BASE_RAM 0xFEDCBA98
+
+--STOP
+
+WRITE 0x0 0x76543210
+READ  0x0
+CHECK 0x0 0x76543210
+SET_ATOMIC 0
+
+PRINT --------------------------------------------------------------------
+PRINT SINGLE
+PRINT --------------------------------------------------------------------
+
+WRITE BASE_RAM + 0x0 0x11111111
+
+WRITE BASE_REG0 + 0x0 0x11111111
+WRITE BASE_REG1 + 0x0 0x22222222
+
+READ  BASE_REG0 + 0x0
+READ  BASE_REG1 + 0x0
+
+CHECK BASE_REG0 + 0x0 0x11111111
+CHECK BASE_REG1 + 0x0 0x22222222
+
+PRINT --------------------------------------------------------------------
+PRINT FIFO SINGLE
+PRINT --------------------------------------------------------------------
+
+FIFO_WRITE BASE_REG4 + 0x0 1 0x55AAAA55
+FIFO_WRITE BASE_REG5 + 0x0 1 0x5555AAAA
+FIFO_WRITE BASE_REG6 + 0x0 1 0xAA5555AA
+FIFO_WRITE BASE_REG7 + 0x0 1 0xAAAA5555
+
+FIFO_READ BASE_REG4 + 0x0 1
+FIFO_READ BASE_REG5 + 0x0 1
+FIFO_READ BASE_REG6 + 0x0 1
+FIFO_READ BASE_REG7 + 0x0 1
+
+FIFO_CHECK BASE_REG4 + 0x0 1 0x55AAAA55
+FIFO_CHECK BASE_REG5 + 0x0 1 0x5555AAAA
+FIFO_CHECK BASE_REG6 + 0x0 1 0xAA5555AA
+FIFO_CHECK BASE_REG7 + 0x0 1 0xAAAA5555
+
+PRINT --------------------------------------------------------------------
+PRINT FIFO MULTIPLE
+PRINT --------------------------------------------------------------------
+
+FIFO_WRITE BASE_FIFO_WR + 0x0 4 0x76543210 0xFEDCBA98 0xDEADBEEF 0xC1A0CAFE
+FIFO_WRITE BASE_FIFO_WR + 0x0 4 0x55555555 0xAAAAAAAA 0x77777777 0x33333333
+FIFO_READ  BASE_FIFO_RD + 0x0 4
+FIFO_CHECK BASE_FIFO_RD + 0x0 4 0x55555555 0xAAAAAAAA 0x77777777 0x33333333
+
+PRINT --------------------------------------------------------------------
+PRINT BURST Memory
+PRINT --------------------------------------------------------------------
+
+BURST_WRITE BASE_RAM + 0x0 4 0xAAAA0000 0xAAAA0001 0xAAAA0002 0xAAAA0003
+BURST_READ BASE_RAM + 0x0 4
+BURST_CHECK BASE_RAM + 0x0 4 0xAAAA0000 0xAAAA0001 0xAAAA0002 0xAAAA0003
+
+PRINT --------------------------------------------------------------------
+PRINT BURST Registers
+PRINT --------------------------------------------------------------------
+
+BURST_WRITE BASE_REG0 + 0x0 4 0x76543210 0xFEDCBA98 0xDEADBEEF 0xC1A0CAFE
+BURST_READ BASE_REG0 + 0x0 4
+BURST_CHECK BASE_REG0 + 0x0 4 0x76543210 0xFEDCBA98 0xDEADBEEF 0xC1A0CAFE
+
+PRINT --------------------------------------------------------------------
+PRINT WRAP4 No boundary cross
+PRINT --------------------------------------------------------------------
+
+WRAP_WRITE BASE_RAM + 0x0 4 0xAAAA1000 0xAAAA1001 0xAAAA1002 0xAAAA1003
+WRAP_READ BASE_RAM + 0x0 4
+WRAP_CHECK BASE_RAM + 0x0 4 0xAAAA1000 0xAAAA1001 0xAAAA1002 0xAAAA1003
+
+PRINT --------------------------------------------------------------------
+PRINT WRAP8 No boundary cross
+PRINT --------------------------------------------------------------------
+
+WRAP_WRITE BASE_RAM + 0x0 8 0xAAAA2000 0xAAAA2001 0xAAAA2002 0xAAAA2003 0xAAAA2004 0xAAAA2005 0xAAAA2006 0xAAAA2007
+WRAP_READ BASE_RAM + 0x0 8
+WRAP_CHECK BASE_RAM + 0x0 8 0xAAAA2000 0xAAAA2001 0xAAAA2002 0xAAAA2003 0xAAAA2004 0xAAAA2005 0xAAAA2006 0xAAAA2007
+
+PRINT --------------------------------------------------------------------
+PRINT WRAP16 No boundary cross
+PRINT --------------------------------------------------------------------
+
+WRAP_WRITE BASE_RAM + 0x0 16 0xAAAA3000 0xAAAA3001 0xAAAA3002 0xAAAA3003 0xAAAA3004 0xAAAA3005 0xAAAA3006 0xAAAA3007 0xAAAA3008 0xAAAA3009 0xAAAA300A 0xAAAA300B 0xAAAA300C 0xAAAA300D 0xAAAA300E 0xAAAA300F
+WRAP_READ BASE_RAM + 0x0 16
+WRAP_CHECK BASE_RAM + 0x0 16 0xAAAA3000 0xAAAA3001 0xAAAA3002 0xAAAA3003 0xAAAA3004 0xAAAA3005 0xAAAA3006 0xAAAA3007 0xAAAA3008 0xAAAA3009 0xAAAA300A 0xAAAA300B 0xAAAA300C 0xAAAA300D 0xAAAA300E 0xAAAA300F
+
+PRINT --------------------------------------------------------------------
+PRINT Test command unrecognized
+PRINT --------------------------------------------------------------------
+
+--This is a first test command unrecognized.
+
+PRINT --------------------------------------------------------------------
+PRINT Test command unrecognized
+PRINT --------------------------------------------------------------------
+
+--This is a second test command unrecognized.
+
+PRINT --------------------------------------------------------------------
+PRINT WRAP4 Crossing boundary
+PRINT --------------------------------------------------------------------
+
+WRAP_WRITE BASE_RAM + 0x14 4 0xAAAA1000 0xAAAA1001 0xAAAA1002 0xAAAA1003
+WRAP_READ  BASE_RAM + 0x14 4
+WRAP_CHECK BASE_RAM + 0x14 4 0xAAAA1000 0xAAAA1001 0xAAAA1002 0xAAAA1003
+BURST_CHECK BASE_RAM + 0x10 8 0xAAAA1003 0xAAAA1000 0xAAAA1001 0xAAAA1002 0xAAAA3008 0xAAAA3009 0xAAAA300A 0xAAAA300B
+
+PRINT --------------------------------------------------------------------
+PRINT WRAP8 Crossing boundary
+PRINT --------------------------------------------------------------------
+
+WRAP_WRITE BASE_RAM + 0x20 8 0xAAAA2000 0xAAAA2001 0xAAAA2002 0xAAAA2003 0xAAAA2004 0xAAAA2005 0xAAAA2006 0xAAAA2007
+WRAP_READ BASE_RAM + 0x20 8
+WRAP_CHECK BASE_RAM + 0x20 8 0xAAAA2000 0xAAAA2001 0xAAAA2002 0xAAAA2003 0xAAAA2004 0xAAAA2005 0xAAAA2006 0xAAAA2007
+
+PRINT --------------------------------------------------------------------
+PRINT WRAP16 Crossing boundary
+PRINT --------------------------------------------------------------------
+
+WRAP_WRITE BASE_RAM + 0x40 16 0xAAAA3000 0xAAAA3001 0xAAAA3002 0xAAAA3003 0xAAAA3004 0xAAAA3005 0xAAAA3006 0xAAAA3007 0xAAAA3008 0xAAAA3009 0xAAAA300A 0xAAAA300B 0xAAAA300C 0xAAAA300D 0xAAAA300E 0xAAAA300F
+WRAP_READ BASE_RAM + 0x40 16
+WRAP_CHECK BASE_RAM + 0x40 16 0xAAAA3000 0xAAAA3001 0xAAAA3002 0xAAAA3003 0xAAAA3004 0xAAAA3005 0xAAAA3006 0xAAAA3007 0xAAAA3008 0xAAAA3009 0xAAAA300A 0xAAAA300B 0xAAAA300C 0xAAAA300D 0xAAAA300E 0xAAAA300F
+
+--INCLUDE semantic_test.txt
+
+INCLUDE wrap_burst_256.txt
+
+INCLUDE new_command.txt
+
+INCLUDE wrap_burst_1024.txt
+
+END_SIM
+
+--PRINT Comando dopo END SIM
+--FIFO_READ BASE_REG4 + 0x0
+--FIFO_READ BASE_REG5 + 0x0
+--FIFO_READ BASE_REG6 + 0x0
+--FIFO_READ BASE_REG7 + 0x0
+
