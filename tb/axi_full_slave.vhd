@@ -15,7 +15,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-entity axi_slave_simple is
+entity axi_full_slave is
     port (
         clk      : in  std_logic;
         resetn   : in  std_logic;
@@ -29,6 +29,11 @@ entity axi_slave_simple is
         awsize   : in  std_logic_vector(2 downto 0);
         awburst  : in  std_logic_vector(1 downto 0);
         awid     : in  std_logic_vector(3 downto 0);  -- ✔ AGGIUNTO (esempio 4 bit)
+
+        awlock   : in std_logic;
+        awcache  : in std_logic_vector(3 downto 0);
+        awprot   : in std_logic_vector(2 downto 0);
+        awqos    : in std_logic_vector(3 downto 0);
 
         wvalid   : in  std_logic;
         wready   : out std_logic;
@@ -49,6 +54,12 @@ entity axi_slave_simple is
         arburst  : in  std_logic_vector(1 downto 0);
         arid     : in  std_logic_vector(3 downto 0);  -- ✔ AGGIUNTO
 
+
+        arlock   : in std_logic;
+        arcache  : in std_logic_vector(3 downto 0);
+        arprot   : in std_logic_vector(2 downto 0);
+        arqos    : in std_logic_vector(3 downto 0);
+
         rvalid   : out std_logic;
         rready   : in  std_logic;
         rdata    : out std_logic_vector(31 downto 0);
@@ -58,7 +69,7 @@ entity axi_slave_simple is
     );
 end entity;
 
-architecture rtl of axi_slave_simple is
+architecture rtl of axi_full_slave is
 
     --------------------------------------------------------------------
     -- REGISTRI 0WS

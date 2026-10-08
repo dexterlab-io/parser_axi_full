@@ -19,10 +19,10 @@ use work.cmd_cfg.all;
 use work.cmd_cmd_pkg.all;
 use work.cmd_pkg.all;
 
-entity tb_axi is
+entity tb_axi_full is
 end entity;
 
-architecture tb of tb_axi is
+architecture tb of tb_axi_full is
 
 
     --------------------------------------------------------------------
@@ -40,17 +40,20 @@ architecture tb of tb_axi is
     signal s_parser_ready   : std_logic;
 
     signal s_parser_cmd : t_cmd_out := (
-        cmd_write	=> '0',
-        cmd_burst	=> '0',
-        cmd_wrap	=> '0',
-        cmd_fifo	=> '0',
-        cmd_atomic	=> '0',
-        cmd_id		=> (others => '0'),
-        cmd_addr	=> (others => '0'),
-        cmd_len		=> 0,
-        cmd_data	=> (others => (others => '0')),
-   		cmd_wstrb	=> (others => '0')
-
+		cmd_write	=> '0',
+		cmd_burst	=> '0',
+		cmd_wrap	=> '0',
+		cmd_fifo	=> '0',
+		cmd_id		=> (others => '0'),
+		cmd_addr	=> (others => '0'),
+		cmd_len		=> 0,
+		cmd_data	=> (others => (others => '0')),
+		cmd_wstrb	=> (others => '0'),
+		cmd_prot	=> (others => '0'),
+		cmd_size	=> (others => '0'),
+		cmd_lock	=> '0',
+		cmd_cache	=> (others => '0'),
+		cmd_qos		=> (others => '0')
     );
 
     signal s_parser_rsp_ready : t_rsp_out := (
@@ -76,16 +79,20 @@ architecture tb of tb_axi is
     signal s_master_ready   : std_logic;
 
     signal s_master_cmd : t_cmd_out := (
-        cmd_write	=> '0',
-        cmd_burst	=> '0',
-        cmd_wrap	=> '0',
-        cmd_fifo	=> '0',
-        cmd_atomic	=> '0',
-        cmd_id		=> (others => '0'),
-        cmd_addr	=> (others => '0'),
-        cmd_len		=> 0,
-        cmd_data	=> (others => (others => '0')),
-   		cmd_wstrb	=> (others => '0')
+		cmd_write	=> '0',
+		cmd_burst	=> '0',
+		cmd_wrap	=> '0',
+		cmd_fifo	=> '0',
+		cmd_id		=> (others => '0'),
+		cmd_addr	=> (others => '0'),
+		cmd_len		=> 0,
+		cmd_data	=> (others => (others => '0')),
+		cmd_wstrb	=> (others => '0'),
+		cmd_prot	=> (others => '0'),
+		cmd_size	=> (others => '0'),
+		cmd_lock	=> '0',
+		cmd_cache	=> (others => '0'),
+		cmd_qos		=> (others => '0')
     );
 
     signal s_master_rsp_ready : t_rsp_out := (
@@ -125,6 +132,11 @@ architecture tb of tb_axi is
     signal s_awsize  : std_logic_vector(2 downto 0);
     signal s_awid    : std_logic_vector(C_ID_WIDTH-1 downto 0);
 
+    signal s_awlock  : std_logic;
+    signal s_awcache : std_logic_vector(3 downto 0);
+    signal s_awprot  : std_logic_vector(2 downto 0);
+    signal s_awqos   : std_logic_vector(3 downto 0);
+
     signal s_wvalid : std_logic;
     signal s_wready : std_logic;
     signal s_wdata  : std_logic_vector(C_DATA_WIDTH-1 downto 0);
@@ -143,6 +155,11 @@ architecture tb of tb_axi is
     signal s_arburst : std_logic_vector(1 downto 0);
     signal s_arsize  : std_logic_vector(2 downto 0);
     signal s_arid    : std_logic_vector(C_ID_WIDTH-1 downto 0);
+
+    signal s_arlock  : std_logic;
+    signal s_arcache : std_logic_vector(3 downto 0);
+    signal s_arprot  : std_logic_vector(2 downto 0);
+    signal s_arqos   : std_logic_vector(3 downto 0);
 
     signal s_rvalid : std_logic;
     signal s_rready : std_logic;
@@ -267,6 +284,11 @@ begin
             awsize     => s_awsize,
             awid       => s_awid,
 
+            awlock     => s_awlock,
+            awcache    => s_awcache,
+            awprot     => s_awprot,
+            awqos      => s_awqos,
+
             wvalid     => s_wvalid,
             wready     => s_wready,
             wdata      => s_wdata,
@@ -286,6 +308,11 @@ begin
             arsize     => s_arsize,
             arid       => s_arid,
 
+            arlock     => s_arlock,
+            arcache    => s_arcache,
+            arprot     => s_arprot,
+            arqos      => s_arqos,
+
             rvalid     => s_rvalid,
             rready     => s_rready,
             rdata      => s_rdata,
@@ -297,7 +324,7 @@ begin
     --------------------------------------------------------------------
     -- AXI Slave model
     --------------------------------------------------------------------
-    i_axi_slave_simple : entity work.axi_slave_simple
+    i_axi_full_slave : entity work.axi_full_slave
         port map (
             clk        => s_clk,
             resetn     => s_resetn,
@@ -311,6 +338,11 @@ begin
             awsize     => s_awsize,
             awid       => s_awid,
 
+            awlock     => s_awlock,
+            awcache    => s_awcache,
+            awprot     => s_awprot,
+            awqos      => s_awqos,
+
             wvalid     => s_wvalid,
             wready     => s_wready,
             wdata      => s_wdata,
@@ -330,6 +362,11 @@ begin
             arsize     => s_arsize,
             arid       => s_arid,
 
+            arlock     => s_arlock,
+            arcache    => s_arcache,
+            arprot     => s_arprot,
+            arqos      => s_arqos,
+
             rvalid     => s_rvalid,
             rready     => s_rready,
             rdata      => s_rdata,
@@ -341,7 +378,7 @@ begin
     --------------------------------------------------------------------
     -- AXI Monitor (invariato)
     --------------------------------------------------------------------
-    u_axi_monitor : entity work.axi_monitor
+    u_axi_full_monitor : entity work.axi_full_monitor
         generic map (
             g_axi_monitor_out => "axi_monitor_out.log"
         )
@@ -354,6 +391,11 @@ begin
             awaddr     => s_awaddr,
             awlen      => s_awlen,
             awid       => s_awid,
+
+            awlock     => s_awlock,
+            awcache    => s_awcache,
+            awprot     => s_awprot,
+            awqos      => s_awqos,
 
             wvalid     => s_wvalid,
             wready     => s_wready,
@@ -371,6 +413,11 @@ begin
             araddr     => s_araddr,
             arlen      => s_arlen,
             arid       => s_arid,
+
+            arlock     => s_arlock,
+            arcache    => s_arcache,
+            arprot     => s_arprot,
+            arqos      => s_arqos,
 
             rvalid     => s_rvalid,
             rready     => s_rready,

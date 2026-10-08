@@ -22,6 +22,9 @@ use work.cmd_math_pkg.all;
 
 entity cmd_axi_full is
     port (
+        ----------------------------------------------------------------
+        -- Clock & Reset
+        ----------------------------------------------------------------
         clk     : in  std_logic;
         resetn  : in  std_logic;
 
@@ -36,7 +39,7 @@ entity cmd_axi_full is
         rsp_out  : out t_rsp_in;
 
         ----------------------------------------------------------------
-        -- AXI bus
+        -- AXI WRITE ADDRESS CHANNEL (AW)
         ----------------------------------------------------------------
         awvalid : out std_logic;
         awready : in  std_logic;
@@ -46,17 +49,32 @@ entity cmd_axi_full is
         awsize  : out std_logic_vector(2 downto 0);
         awid    : out std_logic_vector(C_ID_WIDTH-1 downto 0);
 
+        -- Nuovi segnali AXI
+        awlock  : out std_logic;                       -- cmd_lock
+        awcache : out std_logic_vector(3 downto 0);    -- cmd_cache
+        awprot  : out std_logic_vector(2 downto 0);    -- cmd_prot
+        awqos   : out std_logic_vector(3 downto 0);    -- cmd_qos
+
+        ----------------------------------------------------------------
+        -- AXI WRITE DATA CHANNEL (W)
+        ----------------------------------------------------------------
         wvalid : out std_logic;
         wready : in  std_logic;
         wdata  : out std_logic_vector(C_DATA_WIDTH-1 downto 0);
         wstrb  : out std_logic_vector((C_DATA_WIDTH/8)-1 downto 0);
         wlast  : out std_logic;
 
+        ----------------------------------------------------------------
+        -- AXI WRITE RESPONSE CHANNEL (B)
+        ----------------------------------------------------------------
         bvalid : in  std_logic;
         bready : out std_logic;
         bresp  : in  std_logic_vector(1 downto 0);
         bid    : in  std_logic_vector(C_ID_WIDTH-1 downto 0);
 
+        ----------------------------------------------------------------
+        -- AXI READ ADDRESS CHANNEL (AR)
+        ----------------------------------------------------------------
         arvalid : out std_logic;
         arready : in  std_logic;
         araddr  : out std_logic_vector(C_ADDR_WIDTH-1 downto 0);
@@ -65,6 +83,15 @@ entity cmd_axi_full is
         arsize  : out std_logic_vector(2 downto 0);
         arid    : out std_logic_vector(C_ID_WIDTH-1 downto 0);
 
+        -- Nuovi segnali AXI
+        arlock  : out std_logic;                       -- cmd_lock
+        arcache : out std_logic_vector(3 downto 0);    -- cmd_cache
+        arprot  : out std_logic_vector(2 downto 0);    -- cmd_prot
+        arqos   : out std_logic_vector(3 downto 0);    -- cmd_qos
+
+        ----------------------------------------------------------------
+        -- AXI READ DATA CHANNEL (R)
+        ----------------------------------------------------------------
         rvalid : in  std_logic;
         rready : out std_logic;
         rdata  : in  std_logic_vector(C_DATA_WIDTH-1 downto 0);
@@ -73,6 +100,7 @@ entity cmd_axi_full is
         rid    : in  std_logic_vector(C_ID_WIDTH-1 downto 0)
     );
 end entity cmd_axi_full;
+
 
 architecture rtl of cmd_axi_full is
 
@@ -1022,6 +1050,16 @@ begin
 	arburst <= s_arburst_reg;
 
 	wstrb <= s_wstrb_cur;
+
+	awlock  <= cmd.cmd_lock;
+	awcache <= cmd.cmd_cache;
+	awprot  <= cmd.cmd_prot;
+	awqos   <= cmd.cmd_qos;
+
+	arlock  <= cmd.cmd_lock;
+	arcache <= cmd.cmd_cache;
+	arprot  <= cmd.cmd_prot;
+	arqos   <= cmd.cmd_qos;
 
 	--------------------------------------------------------------------
 	-- Uscite canale W

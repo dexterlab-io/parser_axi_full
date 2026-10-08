@@ -242,18 +242,22 @@ package cmd_cmd_pkg is
 	--------------------------------------------------------------------
     -- RECORD INTERFACCIA AXI
     --------------------------------------------------------------------
-	type t_cmd_out is record
-		cmd_write : std_logic;                     -- 1 = write, 0 = read
-		cmd_burst : std_logic;                     -- 1 = multi-beat
-		cmd_wrap  : std_logic;                     -- 1 = wrap addressing
-		cmd_fifo  : std_logic;                     -- 1 = fifo addressing
-		cmd_atomic : std_logic;                    -- 1 = atomic operation
-		cmd_id    : unsigned(C_ID_WIDTH-1 downto 0);
-		cmd_addr  : t_addr;
-		cmd_len   : natural range 0 to 256;
-		cmd_data  : t_data_array;
-		cmd_wstrb  : std_logic_vector((C_DATA_WIDTH/8)-1 downto 0);
-	end record;
+    type t_cmd_out is record
+        cmd_write : std_logic;                     -- 1 = write, 0 = read
+        cmd_burst : std_logic;                     -- 1 = multi-beat
+        cmd_wrap  : std_logic;                     -- 1 = wrap addressing
+        cmd_fifo  : std_logic;                     -- 1 = fifo addressing
+        cmd_id    : unsigned(C_ID_WIDTH-1 downto 0);
+        cmd_addr  : std_logic_vector(C_ADDR_WIDTH-1 downto 0);
+        cmd_len   : natural range 0 to 256;
+        cmd_data  : t_data_array;
+        cmd_wstrb : std_logic_vector((C_DATA_WIDTH/8)-1 downto 0);
+        cmd_prot  : std_logic_vector(2 downto 0); -- AXI Protection Attributes (AWPROT/ARPROT) [0] privileged / non-privileged [1] secure / non-secure [2] instruction / data
+        cmd_size  : std_logic_vector(2 downto 0); -- AXI Size (AWSIZE/ARSIZE) = log2(bytes_per_beat)
+        cmd_lock  : std_logic;                    -- AXI Lock (AWLOCK/ARLOCK)
+        cmd_cache : std_logic_vector(3 downto 0); -- AXI Cache Attributes (AWCACHE/ARCACHE)
+        cmd_qos   : std_logic_vector(3 downto 0); -- AXI QoS Attributes (AWQOS/ARQOS)
+    end record;
 
 	type t_rsp_out is record
 		rsp_ready     : std_logic;   -- parser pronto a ricevere dati

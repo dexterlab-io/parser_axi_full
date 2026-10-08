@@ -14,13 +14,15 @@
 
 .SILENT:
 
-TOP	= tb_axi
+TOP	= tb_axi_full
 
 clean:
 	if exist .Xil rmdir /s /q .Xil
-	rmdir /s /q xsim.dir
-	del /f *.log *.jou *.pb *.wdb
-
+	if exist xsim.dir rmdir /s /q xsim.dir
+	if exist *.log del /f *.log
+	if exist *.jou del /f *.jou
+	if exist *.pb del /f *.pb
+	if exist *.wdb del /f *.wdb
 
 # ============================================================
 #  Vivado xsim setup
@@ -56,14 +58,14 @@ xsim_compile:
 	xvhdl ..\..\..\tb\ckrst.vhd \
 		..\..\..\tb\cmd_master.vhd \
 		..\..\..\tb\arbiter_mux.vhd \
-		..\..\..\tb\axi_monitor.vhd \
+		..\..\..\tb\axi_full_monitor.vhd \
 		..\..\..\tb\ram_sync.vhd \
 		..\..\..\tb\ram_sync_wstrb.vhd \
 		..\..\..\tb\gen_fifo_wr.vhd \
 		..\..\..\tb\gen_fifo_rd.vhd \
 		..\..\..\tb\gen_fifo.vhd \
-		..\..\..\tb\axi_slave_simple.vhd \
-		..\..\..\tb\tb_axi.vhd
+		..\..\..\tb\axi_full_slave.vhd \
+		..\..\..\tb\tb_axi_full.vhd
 
 # Elaborazione del design
 xsim_elab:
@@ -79,4 +81,4 @@ xsim_run:
 xsim: xsim_compile xsim_elab xsim_run
 
 xsim_gui:
-	xsim tb_axi_sim --gui
+	xsim tb_axi_full_sim --gui

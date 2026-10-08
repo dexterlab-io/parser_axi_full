@@ -39,7 +39,7 @@ endif
 
 WORKDIR		= ./workdir
 
-TOP		= tb_axi
+TOP		= tb_axi_full
 
 VHDL_93		= ghdl -a -C --std=93	 -lv --workdir=$(WORKDIR)
 VHDL_93C	= ghdl -a --std=93c	 -lv --workdir=$(WORKDIR)
@@ -75,14 +75,14 @@ RTL_AXI_FULL	=	../../../rtl/cmd_axi_full.vhd
 TB		=	../../../tb/ckrst.vhd \
 			../../../tb/cmd_master.vhd \
 			../../../tb/arbiter_mux.vhd \
-			../../../tb/axi_monitor.vhd \
+			../../../tb/axi_full_monitor.vhd \
 			../../../tb/ram_sync.vhd \
 			../../../tb/ram_sync_wstrb.vhd \
 			../../../tb/gen_fifo_wr.vhd \
 			../../../tb/gen_fifo_rd.vhd \
 			../../../tb/gen_fifo.vhd \
-			../../../tb/axi_slave_simple.vhd \
-			../../../tb/tb_axi.vhd
+			../../../tb/axi_full_slave.vhd \
+			../../../tb/tb_axi_full.vhd
 
 comp: clean rtl tb elab
 all: clean rtl tb elab sim

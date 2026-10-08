@@ -1,8 +1,7 @@
 📘 Vivado Simulation Environment — AXI‑Full Backend
 (Directory: parser_axi_full/sim/vivado/core/)
-
 Overview
-This directory contains the Vivado XSIM simulation environment for the AXI‑Full backend of the DexterLab parser system.
+This directory contains the Vivado XSIM simulation environment for the AXI‑Full backend of the DexterLab Parser system.
 
 The simulation validates:
 
@@ -16,7 +15,7 @@ multi‑beat write and read sequences
 
 AXI channel behavior (AW, W, B, AR, R)
 
-the complete AXI testbench (tb_axi.vhd)
+the complete AXI‑Full testbench (tb_axi.vhd)
 
 This README explains how to run the simulation.
 For architectural details and protocol documentation, refer to the main project documentation under docs/.
@@ -47,11 +46,11 @@ This performs:
 
 RTL compilation (xvhdl)
 
-Testbench compilation (xvhdl)
+testbench compilation (xvhdl)
 
-Design elaboration (xelab)
+design elaboration (xelab)
 
-Batch simulation (xsim)
+batch simulation (xsim)
 
 The following files are generated:
 
@@ -124,5 +123,3 @@ burst/fifo/wrap handling
 integration guidelines
 
 refer to the documentation located in the docs/ directory of the parser_axi_full project.
-
-# End of Document

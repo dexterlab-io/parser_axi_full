@@ -89,12 +89,16 @@ architecture rtl of cmd_parser is
         cmd_burst  => '0',
         cmd_wrap   => '0',
         cmd_fifo   => '0',
-        cmd_atomic => '0',
         cmd_id     => (others => '0'),
         cmd_addr   => (others => '0'),
         cmd_len    => 0,
         cmd_data   => (others => (others => '0')),
-		cmd_wstrb  => (others => '0')
+        cmd_wstrb  => (others => '0'),
+        cmd_prot   => (others => '0'),
+        cmd_size   => (others => '0'),
+        cmd_lock   => '0',
+        cmd_cache  => (others => '0'),
+        cmd_qos    => (others => '0')
     );
 
     signal s_rsp_out : t_rsp_out := (
@@ -930,18 +934,23 @@ begin
 		-- Default (parcheggio)
 		----------------------------------------------------------------
 
-		s_cmd_out.cmd_write      <= '0';
-		s_cmd_out.cmd_burst      <= '0';
-		s_cmd_out.cmd_wrap       <= '0';
-		s_cmd_out.cmd_fifo       <= '0';
-		s_cmd_out.cmd_atomic     <= s_atomic;
+		s_cmd_out.cmd_write		<= '0';
+		s_cmd_out.cmd_burst		<= '0';
+		s_cmd_out.cmd_wrap		<= '0';
+		s_cmd_out.cmd_fifo		<= '0';
 
-		s_cmd_out.cmd_id         <= s_mc_cur.cmd_id;
-		s_cmd_out.cmd_addr       <= s_mc_cur.addr;
-		s_cmd_out.cmd_len        <= s_mc_cur.len;
-		s_cmd_out.cmd_data       <= s_mc_cur.data_array;
+		s_cmd_out.cmd_id		<= s_mc_cur.cmd_id;
+		s_cmd_out.cmd_addr		<= s_mc_cur.addr;
+		s_cmd_out.cmd_len		<= s_mc_cur.len;
+		s_cmd_out.cmd_data		<= s_mc_cur.data_array;
 
-		s_cmd_out.cmd_wstrb      <= (others => '1');
+		s_cmd_out.cmd_wstrb		<= (others => '1');
+
+		s_cmd_out.cmd_prot		<= (others => '0');
+		s_cmd_out.cmd_size		<= (others => '0');
+		s_cmd_out.cmd_lock		<= s_atomic;
+		s_cmd_out.cmd_cache		<= (others => '0');
+		s_cmd_out.cmd_qos		<= (others => '0');
 
 		----------------------------------------------------------------
 		-- Decodifica del comando corrente

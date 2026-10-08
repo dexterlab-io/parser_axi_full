@@ -1,6 +1,10 @@
-# GHDL Simulation Guide — AXI-Full Backend
+✅ sim_ghdl.md — Updated Version (2026 Edition)
+markdown
+# GHDL Simulation Guide — AXI‑Full Backend  
+**DexterLab Documentation Suite — 2026 Edition**
 
-This document explains how to run the AXI-Full backend simulation using GHDL.
+This document explains how to run the AXI‑Full backend simulation using GHDL.  
+The GHDL environment provides fast, pure‑VHDL simulation suitable for functional and waveform‑level validation.
 
 ---
 
@@ -14,42 +18,43 @@ Codice
 
 Contains:
 
-- Makefile
-- tb_axi.vhd
-- workdir/
-- waveform files
+- `Makefile`
+- `tb_axi.vhd`
+- `workdir/`
+- waveform files (`.ghw`, `.vcd`, `.fst`)
+- log files
 
 ---
 
 ## 2. Requirements
 
-- GHDL (LLVM recommended)
-- GTKWave
-- MSYS2 / MINGW64 or Linux
+- **GHDL** (LLVM backend recommended)
+- **GTKWave** for waveform viewing
+- **MSYS2 / MINGW64** or **Linux**
 
 ---
 
 ## 3. Running the Simulation
 
-### Full simulation:
+### Full simulation (compile + elaborate + run)
 
 make all
 
 Codice
 
-### Batch simulation:
+### Batch simulation (no GUI)
 
 make sim
 
 Codice
 
-### Interactive simulation:
+### Interactive simulation (run + open waveform)
 
 make simwave
 
 Codice
 
-### View waveform:
+### View waveform only
 
 make wave
 
@@ -59,100 +64,52 @@ Codice
 
 ## 4. Debug Logging
 
-Enable in:
+Debug logging is controlled in:
 
 cmd_cfg.vhd
 
 Codice
 
-Set:
+Enable debug messages by setting:
 
 ```vhdl
 ENABLE_DEBUG_LOG := true;
-5. Cleaning
-Codice
-make clean
-6. Summary
-GHDL provides fast, pure-VHDL simulation for the AXI-Full backend.
+Debug prints appear in the GHDL console output.
 
-Codice
+5. Generated Files
+GHDL produces:
 
----
+workdir/ — compilation artifacts
 
-# 📄 7. `sim_vivado.md`
+tb_axi.ghw — GTKWave waveform
 
-```markdown
-# Vivado XSIM Simulation Guide — AXI-Full Backend
+.vcd / .fst — optional waveform formats
 
-This document explains how to run the AXI-Full backend simulation using Vivado
-XSIM.
+sim.log — simulation log
 
----
-
-## 1. Directory Structure
-
-Located under:
-
-parser_axi_full/sim/vivado/core/
-
-Codice
-
-Contains:
-
-- Makefile
-- stop_200us.tcl
-- xsim_env.bat
-
----
-
-## 2. Requirements
-
-- Windows 10/11
-- Vivado 2025.1
-- settings64.bat available
-
----
-
-## 3. Environment Setup
-
-Run:
-
-xsim_env.bat
-
-Codice
-
----
-
-## 4. Running the Simulation
-
-### Full simulation:
-
-make xsim
-
-Codice
-
-### GUI:
-
-make xsim_gui
-
-Codice
-
----
-
-## 5. Debug Logging
-
-Enable in:
-
-cmd_cfg.vhd
-
-Codice
-
-Set:
-
-```vhdl
-ENABLE_DEBUG_LOG := true;
 6. Cleaning
+To remove generated files:
+
 Codice
 make clean
+This clears:
+
+workdir/
+
+waveform files
+
+log files
+
 7. Summary
-Vivado XSIM provides waveform-level AXI simulation with full GUI support.
+GHDL provides fast, pure‑VHDL simulation for the AXI‑Full backend.
+It validates:
+
+burst sequencing
+
+address generation
+
+AXI handshake behavior
+
+parser integration
+
+For Vivado simulation, see sim_vivado.md.

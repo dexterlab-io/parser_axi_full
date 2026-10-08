@@ -1,6 +1,7 @@
-README — GHDL Simulation (parser_axi_full/sim/ghdl/core)
+README — GHDL Simulation Environment
+(parser_axi_full/sim/ghdl/core)
 Overview
-This directory contains the GHDL simulation environment for the AXI‑Full backend of the DexterLab parser system.
+This directory contains the GHDL simulation environment for the AXI‑Full backend of the DexterLab Parser system.
 
 The simulation validates:
 
@@ -8,13 +9,13 @@ the AXI‑Full backend (cmd_axi_full.vhd)
 
 integration with the parser core (cmd_parser.vhd and related packages)
 
-AXI‑Full burst handling (INCR, FIFO, WRAP)
+AXI burst handling (INCR, FIFO, WRAP)
 
 multi‑beat sequencing
 
 AXI channel behavior (AW, W, B, AR, R)
 
-the complete AXI testbench (tb_axi.vhd)
+the complete AXI‑Full testbench (tb_axi.vhd)
 
 This README explains how to run the simulation.
 For architectural details and protocol documentation, refer to the main project documentation under docs/.
@@ -161,6 +162,3 @@ burst/fifo/wrap handling
 integration guidelines
 
 refer to the documentation in the docs/ directory of the parser_axi_full project.
-
-# End of Document
-

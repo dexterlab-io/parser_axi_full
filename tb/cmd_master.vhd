@@ -93,7 +93,6 @@ begin
 	cmd.cmd_burst			<= '0';
 	cmd.cmd_wrap			<= '0';
 	cmd.cmd_fifo			<= '0';
-	cmd.cmd_atomic			<= '0';
 
 	cmd.cmd_id				<= (others => '0');
 	cmd.cmd_addr			<= (others => '0');
@@ -101,6 +100,12 @@ begin
 
 	cmd.cmd_data			<= (others => (others => '0'));
 	cmd.cmd_wstrb			<= (others => '0');
+
+	cmd.cmd_prot		<= (others => '0');
+	cmd.cmd_size		<= (others => '0');
+	cmd.cmd_lock		<= '0';
+	cmd.cmd_cache		<= (others => '0');
+	cmd.cmd_qos			<= (others => '0');
 
 	rsp_out.rsp_ready		<= '1';
     rsp_out.rsp_err_ready	<= '1';

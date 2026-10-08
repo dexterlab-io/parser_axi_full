@@ -21,7 +21,7 @@ use work.cmd_cfg.all;
 use work.cmd_cmd_pkg.all;
 use work.cmd_text_pkg.all;
 
-entity axi_monitor is
+entity axi_full_monitor is
     generic (
         g_axi_monitor_out : string := "axi_monitor_out.log"
     );
@@ -37,6 +37,12 @@ entity axi_monitor is
         awaddr   : in std_logic_vector(C_ADDR_WIDTH-1 downto 0);
         awlen    : in std_logic_vector(7 downto 0);  -- AXI LEN is always 8 bits
         awid     : in std_logic_vector(C_ID_WIDTH-1 downto 0);
+
+        -- Nuovi segnali AXI
+        awlock   : in std_logic;
+        awcache  : in std_logic_vector(3 downto 0);
+        awprot   : in std_logic_vector(2 downto 0);
+        awqos    : in std_logic_vector(3 downto 0);
 
         ------------------------------------------------------------------
         -- WRITE DATA CHANNEL
@@ -64,6 +70,12 @@ entity axi_monitor is
         arlen    : in std_logic_vector(7 downto 0);  -- AXI LEN is always 8 bits
         arid     : in std_logic_vector(C_ID_WIDTH-1 downto 0);
 
+        -- Nuovi segnali AXI
+        arlock   : in std_logic;
+        arcache  : in std_logic_vector(3 downto 0);
+        arprot   : in std_logic_vector(2 downto 0);
+        arqos    : in std_logic_vector(3 downto 0);
+
         ------------------------------------------------------------------
         -- READ DATA CHANNEL
         ------------------------------------------------------------------
@@ -77,7 +89,7 @@ entity axi_monitor is
 end entity;
 
 
-architecture rtl of axi_monitor is
+architecture rtl of axi_full_monitor is
 
     file f_out : text;
     signal file_opened : boolean := false;

@@ -1,54 +1,53 @@
 📘 DexterLab AXI‑Full Backend Documentation
-(Directory: parser_axi_full/docs/)
+Directory: parser_axi_full/docs/  
+DexterLab Documentation Suite — 2026 Edition
 
 This directory contains all documentation related to the AXI‑Full backend of the DexterLab command system.
 It describes how parser commands are translated into AXI‑Full bus transactions, how burst semantics are handled, how the backend integrates with the parser core, and how to simulate and validate the design.
 
 The documentation is modular, readable, and structured so each file can be consulted independently.
 
-1. AXI-Full Backend Documentation
-AXI-Full Backend Architecture
+1. Core Backend Documentation
+AXI‑Full Backend Overview
+backend_axi_full.md  
+High‑level description of the backend, supported AXI features, parser integration, error handling, and simulation support.
+
+AXI‑Full Backend Architecture
 axi_full_architecture.md  
-Describes the internal architecture of the AXI-Full backend, including the command expansion engine, burst sequencing, address generation (INCR, FIFO, WRAP), write and read channel behavior, and response handling.
+Detailed description of the backend’s internal architecture, including the command expansion engine, burst engine, address generator, write/read controllers, and response handler.
 
-AXI-Full Command Mapping
+Architecture Diagrams
+axi_full_architecture_diagrams.md  
+ASCII diagrams illustrating the backend’s internal data flow, burst sequencing, address generation, and response pipeline.
+
+AXI‑Full Command Mapping
 axi_full_cmd_mapping.md  
-Explains how parser commands (t_cmd_out) are translated into AXI-Full transactions, including multi-beat bursts, byte-enable propagation, and timing rules.
+Explains how parser commands (t_cmd_out) are translated into AXI‑Full transactions, including burst types, byte‑enable propagation, and response mapping.
 
-AXI-Full Timing & Handshake
+AXI‑Full Timing & Handshake Rules
 axi_full_timing.md  
-Formal definition of AXI-Full handshake behavior (AW/W/B/AR/R), including ready/valid rules, multi-beat sequencing, WLAST/RLAST generation, and alignment constraints.
+Formal definition of AXI‑Full handshake behavior (AW/W/B/AR/R), ready/valid rules, multi‑beat sequencing, WLAST/RLAST generation, and corner‑case timing.
 
-AXI-Full Error Model
+AXI‑Full Error Model
 axi_full_errors.md  
-Lists backend-specific error conditions (alignment, burst length, wrap boundaries, FIFO violations) and describes how they map to parser response codes.
+Lists backend‑specific error conditions (alignment, burst length, wrap boundary, FIFO violations, AXI slave errors) and describes how they map to parser response codes.
 
-AXI-Full Integration Guide
+AXI‑Full Integration Guide
 axi_full_integration.md  
-Provides guidelines for integrating the AXI-Full backend into SoC designs, including RAM/peripheral interfacing, arbitration, and multi-master environments.
+Guidelines for integrating the backend into RAM, peripherals, SoC subsystems, and multi‑master environments. Includes arbitration rules and atomic mode behavior.
 
-2. Parser Core Dependency
-The AXI-Full backend depends on the DexterLab parser core.
-The specific parser version used in this release is:
-
-Parser Core Version: parser_core v1.0.0
-The parser core is not duplicated inside this repository.
-It is included as a dependency and referenced by the simulation and backend RTL.
-
-For parser documentation, refer to the main parser repository.
-
-3. Simulation Documentation
+2. Simulation Documentation
 GHDL Simulation
 sim_ghdl.md  
-Describes how to run the AXI-Full backend testbench using GHDL, including Makefile usage, waveform generation, debug logging, and directory structure.
+Describes how to run the AXI‑Full backend testbench using GHDL, including Makefile usage, waveform generation, debug logging, and directory structure.
 
 Vivado / XSIM Simulation
 sim_vivado.md  
-Explains how to run the AXI-Full backend testbench using Vivado XSIM, including environment setup, compilation, elaboration, batch simulation, GUI usage, and cleanup.
+Explains how to run the AXI‑Full backend testbench using Vivado XSIM, including environment setup, compilation, elaboration, batch simulation, GUI usage, and cleanup.
 
 Both simulation environments validate:
 
-AXI-Full burst behavior
+AXI‑Full burst behavior
 
 write/read channel correctness
 
@@ -58,27 +57,44 @@ timing and handshake rules
 
 response generation
 
-4. Documentation Philosophy
-The AXI-Full backend documentation follows these principles:
+3. Parser Core Dependency
+The AXI‑Full backend depends on the DexterLab parser core.
 
+Parser Core Version: parser_core v1.1.0  
+Fully backward‑compatible with parser_core v1.0.0.
+
+The parser core is not duplicated inside this repository.
+It is included as a dependency and referenced by the simulation and backend RTL.
+
+For parser documentation, refer to the main parser repository.
+
+4. Documentation Philosophy
 Modular — each file covers one topic
 
-Backend-specific — focused exclusively on AXI-Full behavior
+Backend‑specific — focused exclusively on AXI‑Full behavior
 
-Parser-agnostic — parser core is referenced but not duplicated
+Parser‑agnostic — parser core is referenced but not duplicated
 
-Simulation-neutral — supports GHDL, Vivado, and professional simulators
+Simulation‑neutral — supports GHDL, Vivado, and professional simulators
 
 Readable — diagrams, examples, and clear structure
 
+Cross‑linked — documents reference each other for easy navigation
+
+2026‑aligned — consistent with DexterLab documentation standards
+
 5. How to Navigate
-If you are new to the AXI-Full backend:
+If you are new to the AXI‑Full backend:
 
-Start with axi_full_architecture.md
+Start with backend_axi_full.md
 
-Continue with axi_full_cmd_mapping.md
+Continue with axi_full_architecture.md
 
-Read axi_full_timing.md for handshake and sequencing
+View diagrams in axi_full_architecture_diagrams.md
+
+Read axi_full_cmd_mapping.md for command semantics
+
+Study axi_full_timing.md for handshake and sequencing
 
 Validate your integration using sim_ghdl.md or sim_vivado.md
 
@@ -88,16 +104,16 @@ Read axi_full_integration.md
 
 Review axi_full_errors.md
 
-Consult the parser core documentation for command semantics
+Consult parser documentation for command semantics
 
 6. Summary
 The docs/ directory contains:
 
-complete AXI-Full backend architecture
+complete AXI‑Full backend architecture
 
 command mapping and timing rules
 
-backend-specific error model
+backend‑specific error model
 
 integration guidelines
 
@@ -105,6 +121,4 @@ GHDL and Vivado simulation documentation
 
 reference to the parser core version used
 
-This README serves as the entry point for navigating all AXI-Full backend documentation.
-
-End of Document
+This README serves as the entry point for navigating all AXI‑Full backend documentation.

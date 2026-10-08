@@ -98,12 +98,16 @@ begin
     s_cmd_clear.cmd_burst    <= '0';
     s_cmd_clear.cmd_wrap     <= '0';
     s_cmd_clear.cmd_fifo     <= '0';
-    s_cmd_clear.cmd_atomic     <= '0';
     s_cmd_clear.cmd_id       <= (others => '0');
     s_cmd_clear.cmd_len      <= 0;
     s_cmd_clear.cmd_addr     <= (others => '0');
     s_cmd_clear.cmd_data     <= (others => (others => '0'));
     s_cmd_clear.cmd_wstrb    <= (others => '0');
+    s_cmd_clear.cmd_prot	<= (others => '0');
+	s_cmd_clear.cmd_size	<= (others => '0');
+	s_cmd_clear.cmd_lock	<= '0';
+	s_cmd_clear.cmd_cache	<= (others => '0');
+	s_cmd_clear.cmd_qos		<= (others => '0');
 
     s_rsp_in_clear.rsp_ready     <= '0';
     s_rsp_in_clear.rsp_err_ready <= '0';
@@ -206,7 +210,7 @@ begin
                         state_next <= PARSER_ACTIVE;
 				elsif s_parser_pending = '1' and rsp_in.rsp_err_valid = '1' then
                         state_next <= PARSER_ACTIVE;
-				elsif parser_cmd.cmd_atomic = '1' then
+				elsif parser_cmd.cmd_lock = '1' then
                     state_next <= PARSER_ACTIVE;
                 elsif master_valid = '1' and ready = '1' then
                     state_next <= MASTER_ACTIVE;
@@ -222,7 +226,7 @@ begin
                     state_next <= PARSER_ACTIVE;
                 end if;
 
-			-------------------------------------------------
+            ----------------------------------------------------------------
             -- Master attivo
             ----------------------------------------------------------------
             when MASTER_ACTIVE =>
@@ -230,7 +234,7 @@ begin
                         state_next <= MASTER_ACTIVE;
 				elsif s_master_pending = '1' and rsp_in.rsp_err_valid = '1' then
                         state_next <= MASTER_ACTIVE;
-				elsif master_cmd.cmd_atomic = '1' then
+				elsif master_cmd.cmd_lock = '1' then
                     state_next <= MASTER_ACTIVE;
                 elsif parser_valid = '1' and ready = '1' then
                     state_next <= PARSER_ACTIVE;
