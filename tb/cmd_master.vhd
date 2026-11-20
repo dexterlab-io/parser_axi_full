@@ -7,7 +7,7 @@
 -- ======================================================================
 --  File: cmd_master.vhd
 --  Author: Dexter
---  Date: 2026-09-06
+--  Date: 2026-10-22
 --  Version: 1.0
 -- ======================================================================
 
@@ -101,11 +101,13 @@ begin
 	cmd.cmd_data			<= (others => (others => '0'));
 	cmd.cmd_wstrb			<= (others => '0');
 
-	cmd.cmd_prot		<= (others => '0');
-	cmd.cmd_size		<= (others => '0');
-	cmd.cmd_lock		<= '0';
-	cmd.cmd_cache		<= (others => '0');
-	cmd.cmd_qos			<= (others => '0');
+	cmd.cmd_prot			<= (others => '0');
+	cmd.cmd_size			<= (others => '0');
+	cmd.cmd_lock			<= '0';
+	cmd.cmd_cache			<= (others => '0');
+	cmd.cmd_qos				<= (others => '0');
+	cmd.cmd_err_code		<= (others => '0');
+
 
 	rsp_out.rsp_ready		<= '1';
     rsp_out.rsp_err_ready	<= '1';

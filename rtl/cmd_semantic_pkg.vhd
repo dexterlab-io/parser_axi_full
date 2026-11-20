@@ -7,7 +7,7 @@
 -- ======================================================================
 --  File: cmd_semantic_pkg.vhd
 --  Author: Dexter
---  Date: 2026-09-06
+--  Date: 2026-10-19
 --  Version: 1.0
 -- ======================================================================
 
@@ -227,12 +227,6 @@ package body cmd_semantic_pkg is
 				parser_ok := false;
 				return;
 			end if;
-
-		elsif cmd.command = CMD_POLL_PING then
-
-			-- timeout = cmd.timeout, può essere 0 (0 = MAX_TIMEOUT)
-			-- nessun controllo aggiuntivo
-			null;
 
 		end if;
 

@@ -1,124 +1,405 @@
-📘 DexterLab AXI‑Full Backend Documentation
-Directory: parser_axi_full/docs/  
-DexterLab Documentation Suite — 2026 Edition
+# DexterLab AXI-FULL Backend Documentation
 
-This directory contains all documentation related to the AXI‑Full backend of the DexterLab command system.
-It describes how parser commands are translated into AXI‑Full bus transactions, how burst semantics are handled, how the backend integrates with the parser core, and how to simulate and validate the design.
+Version: 1.2.0
 
-The documentation is modular, readable, and structured so each file can be consulted independently.
+Directory:
 
-1. Core Backend Documentation
-AXI‑Full Backend Overview
-backend_axi_full.md  
-High‑level description of the backend, supported AXI features, parser integration, error handling, and simulation support.
+```text
+parser_axi_full/docs
+```
 
-AXI‑Full Backend Architecture
-axi_full_architecture.md  
-Detailed description of the backend’s internal architecture, including the command expansion engine, burst engine, address generator, write/read controllers, and response handler.
+This directory contains the complete documentation suite for the DexterLab AXI-FULL backend.
 
-Architecture Diagrams
-axi_full_architecture_diagrams.md  
-ASCII diagrams illustrating the backend’s internal data flow, burst sequencing, address generation, and response pipeline.
+The AXI-FULL backend implements the AXI4 execution layer of the DexterLab command architecture. It translates protocol-independent DexterLab commands into AXI4-compliant transactions while preserving command semantics, response behavior, and deterministic execution rules.
 
-AXI‑Full Command Mapping
-axi_full_cmd_mapping.md  
-Explains how parser commands (t_cmd_out) are translated into AXI‑Full transactions, including burst types, byte‑enable propagation, and response mapping.
+The documentation is structured into modular documents that can be read independently or as part of the complete documentation set.
 
-AXI‑Full Timing & Handshake Rules
-axi_full_timing.md  
-Formal definition of AXI‑Full handshake behavior (AW/W/B/AR/R), ready/valid rules, multi‑beat sequencing, WLAST/RLAST generation, and corner‑case timing.
+---
 
-AXI‑Full Error Model
-axi_full_errors.md  
-Lists backend‑specific error conditions (alignment, burst length, wrap boundary, FIFO violations, AXI slave errors) and describes how they map to parser response codes.
+# AXI-FULL Architecture Position
 
-AXI‑Full Integration Guide
-axi_full_integration.md  
-Guidelines for integrating the backend into RAM, peripherals, SoC subsystems, and multi‑master environments. Includes arbitration rules and atomic mode behavior.
+The AXI-FULL backend operates within the standard DexterLab execution architecture:
 
-2. Simulation Documentation
-GHDL Simulation
-sim_ghdl.md  
-Describes how to run the AXI‑Full backend testbench using GHDL, including Makefile usage, waveform generation, debug logging, and directory structure.
+```text
+Parser / Master
+        |
+        v
+     Arbiter
+        |
+        v
+ AXI-FULL Backend
+        |
+        v
+      AXI4 Bus
+```
 
-Vivado / XSIM Simulation
-sim_vivado.md  
-Explains how to run the AXI‑Full backend testbench using Vivado XSIM, including environment setup, compilation, elaboration, batch simulation, GUI usage, and cleanup.
+The backend is responsible for AXI4 protocol execution.
+
+Command semantics remain defined by the DexterLab command architecture.
+
+---
+
+# 1. Core Backend Documentation
+
+## DexterLab AXI-FULL Backend
+
+```text
+DexterLab AXI-FULL Backend.md
+```
+
+High-level overview of the AXI-FULL backend.
+
+Topics include:
+
+- Backend responsibilities
+- Supported features
+- Command execution model
+- Interface model
+- Response generation
+- Error handling
+- Simulation support
+- Integration overview
+
+---
+
+## DexterLab AXI-FULL Architecture
+
+```text
+DexterLab AXI-FULL Architecture.md
+```
+
+Detailed architecture description of the AXI-FULL backend.
+
+Topics include:
+
+- Command Execution Engine
+- Address Generator
+- Write Controller
+- Read Controller
+- Response Handler
+- Internal FSM
+- Data path organization
+- Interface layer
+
+---
+
+## DexterLab AXI-FULL Architecture Diagrams
+
+```text
+DexterLab AXI-FULL Architecture Diagrams.md
+```
+
+ASCII diagrams illustrating:
+
+- Backend hierarchy
+- Command flow
+- Burst engine behavior
+- Address generation
+- Read/write execution paths
+- Response pipeline
+- Command completion flow
+
+---
+
+## DexterLab AXI-FULL Command Mapping
+
+```text
+DexterLab AXI-FULL Command Mapping.md
+```
+
+Defines how DexterLab commands are mapped into AXI4 transactions.
+
+Topics include:
+
+- READ and WRITE operations
+- BURST operations
+- WRAP operations
+- FIFO operations
+- WSTRB propagation
+- Protocol attribute mapping
+- AXI response mapping
+- Command completion model
+
+---
+
+## DexterLab AXI-FULL Timing Specification
+
+```text
+DexterLab AXI-FULL Timing Specification.md
+```
+
+Formal definition of AXI4 timing and handshake behavior.
+
+Topics include:
+
+- AW channel timing
+- W channel timing
+- B channel timing
+- AR channel timing
+- R channel timing
+- Burst sequencing
+- Backpressure behavior
+- Command completion timing
+- Corner-case handling
+
+---
+
+## DexterLab AXI-FULL Error Model
+
+```text
+DexterLab AXI-FULL Error Model.md
+```
+
+Defines the backend error architecture.
+
+Topics include:
+
+- Alignment failures
+- Boundary violations
+- Burst violations
+- WSTRB errors
+- Timeout conditions
+- AXI slave errors
+- Protocol violations
+- Error reporting model
+- Error completion behavior
+
+---
+
+## DexterLab AXI-FULL Integration Guide
+
+```text
+DexterLab AXI-FULL Integration Guide.md
+```
+
+System integration guidelines for AXI-based systems.
+
+Topics include:
+
+- Clocking and reset
+- AXI slave requirements
+- RAM integration
+- Peripheral integration
+- Arbiter interaction
+- Address map strategy
+- Verification recommendations
+- Integration checklist
+
+---
+
+# 2. Simulation Documentation
+
+## GHDL Simulation Environment
+
+```text
+sim_ghdl.md
+```
+
+Documentation for the GHDL-based simulation environment.
+
+Topics include:
+
+- Environment setup
+- Build flow
+- Simulation flow
+- Waveform generation
+- Debug logging
+- Regression testing
+
+---
+
+## Vivado / XSIM Simulation Environment
+
+```text
+sim_vivado.md
+```
+
+Documentation for the Vivado / XSIM simulation environment.
+
+Topics include:
+
+- Environment setup
+- Compilation
+- Elaboration
+- Simulation execution
+- GUI debugging
+- Waveform analysis
+- Cleanup procedures
+
+---
+
+## Validation Coverage
 
 Both simulation environments validate:
 
-AXI‑Full burst behavior
+```text
+Single Transfers
 
-write/read channel correctness
+Burst Operations
 
-parser integration
+FIFO Operations
 
-timing and handshake rules
+WRAP Operations
 
-response generation
+AXI Handshakes
 
-3. Parser Core Dependency
-The AXI‑Full backend depends on the DexterLab parser core.
+Response Generation
 
-Parser Core Version: parser_core v1.1.0  
-Fully backward‑compatible with parser_core v1.0.0.
+Error Propagation
 
-The parser core is not duplicated inside this repository.
-It is included as a dependency and referenced by the simulation and backend RTL.
+Parser Integration
 
-For parser documentation, refer to the main parser repository.
+Arbiter Integration
 
-4. Documentation Philosophy
-Modular — each file covers one topic
+Command Completion
+```
 
-Backend‑specific — focused exclusively on AXI‑Full behavior
+---
 
-Parser‑agnostic — parser core is referenced but not duplicated
+# 3. Dependency on DexterLab Core Documentation
 
-Simulation‑neutral — supports GHDL, Vivado, and professional simulators
+The AXI-FULL backend inherits its command semantics from the DexterLab architecture.
 
-Readable — diagrams, examples, and clear structure
+Recommended core documents:
 
-Cross‑linked — documents reference each other for easy navigation
+```text
+Architecture Overview
 
-2026‑aligned — consistent with DexterLab documentation standards
+Design Principles
 
-5. How to Navigate
-If you are new to the AXI‑Full backend:
+Command Interface
 
-Start with backend_axi_full.md
+Command Flow
 
-Continue with axi_full_architecture.md
+Command Set
 
-View diagrams in axi_full_architecture_diagrams.md
+Error Model
 
-Read axi_full_cmd_mapping.md for command semantics
+Arbiter Specification
 
-Study axi_full_timing.md for handshake and sequencing
+Verification Methodology
 
-Validate your integration using sim_ghdl.md or sim_vivado.md
+Troubleshooting Guide
+```
 
-If you are integrating hardware:
+The AXI-FULL repository documents only protocol-specific AXI4 behavior.
 
-Read axi_full_integration.md
+Parser functionality, command syntax, arbitration rules, and execution semantics are inherited from the main DexterLab documentation suite.
 
-Review axi_full_errors.md
+---
 
-Consult parser documentation for command semantics
+# 4. Documentation Philosophy
 
-6. Summary
-The docs/ directory contains:
+The AXI-FULL documentation follows the same principles as the DexterLab core documentation.
 
-complete AXI‑Full backend architecture
+### Modular
 
-command mapping and timing rules
+Each document covers a specific subsystem or topic.
 
-backend‑specific error model
+### Backend-Specific
 
-integration guidelines
+Documentation focuses on AXI4 behavior without duplicating parser documentation.
 
-GHDL and Vivado simulation documentation
+### Protocol Accurate
 
-reference to the parser core version used
+Descriptions reflect actual backend behavior and AXI4 protocol requirements.
 
-This README serves as the entry point for navigating all AXI‑Full backend documentation.
+### Simulation Neutral
+
+Documentation supports:
+
+```text
+GHDL
+
+Vivado / XSIM
+
+Professional Simulators
+```
+
+### Cross-Linked
+
+Documents reference related material to simplify navigation.
+
+### Consistent
+
+Terminology follows the DexterLab v1.1.0 architecture and AXI-FULL Backend v1.2.0 implementation.
+
+---
+
+# 5. Recommended Reading Order
+
+New users should follow the documentation in this order:
+
+```text
+DexterLab AXI-FULL Backend
+
+DexterLab AXI-FULL Architecture
+
+DexterLab AXI-FULL Architecture Diagrams
+
+DexterLab AXI-FULL Command Mapping
+
+DexterLab AXI-FULL Timing Specification
+
+DexterLab AXI-FULL Error Model
+
+DexterLab AXI-FULL Integration Guide
+```
+
+Simulation-specific documentation can then be consulted as needed.
+
+---
+
+# 6. Hardware Integration Path
+
+For hardware integration:
+
+```text
+DexterLab AXI-FULL Backend
+
+DexterLab AXI-FULL Integration Guide
+
+DexterLab AXI-FULL Error Model
+
+DexterLab AXI-FULL Timing Specification
+```
+
+Review the corresponding DexterLab core documentation for command semantics and arbitration behavior.
+
+---
+
+# 7. Summary
+
+The AXI-FULL documentation suite provides complete coverage of:
+
+```text
+Backend Architecture
+
+AXI4 Transaction Mapping
+
+Timing Rules
+
+Handshake Behavior
+
+Error Handling
+
+System Integration
+
+Simulation Environments
+
+Verification Flow
+```
+
+The documentation is aligned with:
+
+```text
+DexterLab Parser v1.1.0
+
+AXI-FULL Backend v1.2.0
+```
+
+and serves as the primary reference for understanding, integrating, simulating, validating, and extending the AXI-FULL backend.
+
+---
+
+# End of Document

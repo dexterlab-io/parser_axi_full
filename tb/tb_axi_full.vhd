@@ -53,7 +53,8 @@ architecture tb of tb_axi_full is
 		cmd_size	=> (others => '0'),
 		cmd_lock	=> '0',
 		cmd_cache	=> (others => '0'),
-		cmd_qos		=> (others => '0')
+		cmd_qos			=> (others => '0'),
+		cmd_err_code	=> (others => '0')
     );
 
     signal s_parser_rsp_ready : t_rsp_out := (
@@ -62,13 +63,15 @@ architecture tb of tb_axi_full is
     );
 
     signal s_parser_rsp_valid : t_rsp_in := (
+        rsp_end_cmd   => '0',
         rsp_valid     => '0',
         rsp_last      => '0',
         rsp_data      => (others => '0'),
         rsp_id        => (others => '0'),
         rsp_err_valid => '0',
         rsp_err_code  => (others => '0'),
-        rsp_err_info  => (others => '0'),
+        rsp_err_addr  => (others => '0'),
+        rsp_err_beat  => (others => '0'),
         rsp_err_id    => (others => '0')
     );
 
@@ -92,7 +95,8 @@ architecture tb of tb_axi_full is
 		cmd_size	=> (others => '0'),
 		cmd_lock	=> '0',
 		cmd_cache	=> (others => '0'),
-		cmd_qos		=> (others => '0')
+		cmd_qos			=> (others => '0'),
+		cmd_err_code	=> (others => '0')
     );
 
     signal s_master_rsp_ready : t_rsp_out := (
@@ -101,13 +105,15 @@ architecture tb of tb_axi_full is
     );
 
     signal s_master_rsp_valid : t_rsp_in := (
+        rsp_end_cmd   => '0',
         rsp_valid     => '0',
         rsp_last      => '0',
         rsp_data      => (others => '0'),
         rsp_id        => (others => '0'),
         rsp_err_valid => '0',
         rsp_err_code  => (others => '0'),
-        rsp_err_info  => (others => '0'),
+        rsp_err_addr  => (others => '0'),
+        rsp_err_beat  => (others => '0'),
         rsp_err_id    => (others => '0')
     );
 

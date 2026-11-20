@@ -7,7 +7,7 @@
 -- ======================================================================
 --  File: cmd_parse_pkg.vhd
 --  Author: Dexter
---  Date: 2026-09-06
+--  Date: 2026-10-19
 --  Version: 1.0
 -- ======================================================================
 
@@ -218,9 +218,9 @@ package cmd_parse_pkg is
     );
 
     --------------------------------------------------------------------
-    -- POLL PING
+    -- TEST_ERROR
     --------------------------------------------------------------------
-    procedure parse_poll_ping(
+    procedure parse_test_error(
         tokens      : in  token_acc_list_t;
         nt          : in  natural;
         cmd         : inout t_cmd;
@@ -344,8 +344,8 @@ package body cmd_parse_pkg is
 			when CMD_POLL_TOGGLE =>
 				parse_poll_toggle(tokens_acc, nt_acc, cmd, parse_error);
 
-			when CMD_POLL_PING =>
-				parse_poll_ping(tokens_acc, nt_acc, cmd, parse_error);
+			when CMD_TEST_ERROR =>
+				parse_test_error(tokens_acc, nt_acc, cmd, parse_error);
 
 			when CMD_FIFO_WRITE | CMD_FIFO_READ | CMD_FIFO_CHECK =>
 				parse_fifo(tokens_acc, nt_acc, cmd, parse_error);
@@ -1025,39 +1025,49 @@ package body cmd_parse_pkg is
 	end procedure;
 
 	--------------------------------------------------------------------
-	-- parse_poll_ping:
-	-- POLL_PING <addr_expr> [+ offset] <delay> <timeout>
+	-- parse_test_error:
+	-- TEST_ERROR <addr_expr> [+ offset] <error_code>
 	--------------------------------------------------------------------
-	procedure parse_poll_ping(
+	procedure parse_test_error(
 		tokens      : in  token_acc_list_t;
 		nt          : in  natural;
 		cmd         : inout t_cmd;
 		parse_error : inout boolean
 	) is
-		variable idx         : natural := 3;
+		variable idx         : natural := 3;  -- dopo TK_START e comando
 
+		-- indirizzo
 		variable addr_val_u  : unsigned(C_ADDR_WIDTH-1 downto 0);
 		variable addr_val    : t_addr := (others => '0');
 		variable offset_val  : integer := 0;
 
-		variable delay_int   : integer := 0;
-		variable timeout_int : integer := 0;
+		-- codice di errore
+		variable err_code_u  : unsigned(31 downto 0);
+		variable err_code_slv: std_logic_vector(7 downto 0);
 	begin
 		parse_error := false;
 
 		--------------------------------------------------------------------
-		-- 1. Indirizzo
+		-- 1. Indirizzo obbligatorio
 		--------------------------------------------------------------------
 		if idx > nt or tokens(idx).kind = TK_END then
-			report "PARSE POLL_PING ERROR: missing address" severity error;
+			report "PARSE TEST_ERROR ERROR: missing address" severity error;
 			parse_error := true;
 			return;
 		end if;
 
-		eval_addr_u(tokens(idx).text, addr_val_u, parse_error);
+		-- ⭐ Prima prova come numero esadecimale puro
+		eval_number_u(tokens(idx).text, addr_val_u, parse_error);
+
 		if parse_error then
-			report "PARSE POLL_PING ERROR: invalid address expression" severity error;
-			return;
+			-- ⭐ Se NON è un numero, azzera l'errore e usa la normale eval_addr_u
+			parse_error := false;
+
+			eval_addr_u(tokens(idx).text, addr_val_u, parse_error);
+			if parse_error then
+				report "PARSE TEST_ERROR ERROR: invalid address expression" severity error;
+				return;
+			end if;
 		end if;
 
 		addr_val := std_logic_vector(addr_val_u);
@@ -1071,14 +1081,14 @@ package body cmd_parse_pkg is
 				idx := idx + 1;
 
 				if idx > nt or tokens(idx).kind = TK_END then
-					report "PARSE POLL_PING ERROR: missing offset value" severity error;
+					report "PARSE TEST_ERROR ERROR: missing offset value" severity error;
 					parse_error := true;
 					return;
 				end if;
 
 				eval_expr_i(tokens(idx).text, offset_val, parse_error);
 				if parse_error then
-					report "PARSE POLL_PING ERROR: invalid offset expression" severity error;
+					report "PARSE TEST_ERROR ERROR: invalid offset expression" severity error;
 					return;
 				end if;
 
@@ -1087,74 +1097,54 @@ package body cmd_parse_pkg is
 		end if;
 
 		--------------------------------------------------------------------
-		-- 3. Delay
+		-- 3. Codice di errore (obbligatorio)
 		--------------------------------------------------------------------
 		if idx > nt or tokens(idx).kind = TK_END then
-			report "PARSE POLL_PING ERROR: missing delay" severity error;
+			report "PARSE TEST_ERROR ERROR: missing error_code" severity error;
 			parse_error := true;
 			return;
 		end if;
 
-		eval_expr_i(tokens(idx).text, delay_int, parse_error);
-		if parse_error or delay_int < 0 then
-			report "PARSE POLL_PING ERROR: invalid delay expression" severity error;
-			parse_error := true;
+		eval_number_u(tokens(idx).text, err_code_u, parse_error);
+		if parse_error then
+			report "PARSE TEST_ERROR ERROR: invalid error_code expression" severity error;
 			return;
 		end if;
 
-		idx := idx + 1;
+		-- usa solo gli 8 bit meno significativi
+		err_code_slv := std_logic_vector(err_code_u(7 downto 0));
 
 		--------------------------------------------------------------------
-		-- 4. Timeout
+		-- 4. Assegna al comando
 		--------------------------------------------------------------------
-		if idx > nt or tokens(idx).kind = TK_END then
-			report "PARSE POLL_PING ERROR: missing timeout" severity error;
-			parse_error := true;
-			return;
-		end if;
+		cmd.addr      := addr_val;
+		cmd.offset    := offset_val;
+		cmd.err_code  := err_code_slv;
 
-		eval_expr_i(tokens(idx).text, timeout_int, parse_error);
-		if parse_error or timeout_int < 0 then
-			report "PARSE POLL_PING ERROR: invalid timeout expression" severity error;
-			parse_error := true;
-			return;
-		end if;
+		cmd.data       := (others => '0');               -- non usato
+		cmd.data_array := (others => (others => '0'));   -- non usato
+		cmd.len        := 1;                             -- singola read sintetica
 
-		idx := idx + 1;
+		cmd.wait_value := 0;
+		cmd.wait_unit  := TU_NONE;
+		cmd.timeout    := 0;
+		cmd.wrap_size  := 0;
 
 		--------------------------------------------------------------------
-		-- 5. Assegna al comando
+		-- 5. Parametri per semantic_check
 		--------------------------------------------------------------------
-		cmd.addr       := addr_val;
-		cmd.offset     := offset_val;
+		cmd.param_count := 2;
 
-		cmd.data       := (others => '0');
-		cmd.data_array := (others => (others => '0'));
-
-		cmd.wait_value := delay_int;       -- delay tra retry
-		cmd.wait_unit  := TU_CLK;
-
-		cmd.timeout    := natural(timeout_int);  -- ⭐ timeout POLL
-		cmd.len        := 1;                     -- NON usato dal POLL
+		cmd.param_kind(1) := PK_ADDR;   -- indirizzo
+		cmd.param_kind(2) := PK_DATA;   -- error_code
 
 		--------------------------------------------------------------------
-		-- 6. Parametri per semantic_check
-		--------------------------------------------------------------------
-		cmd.param_count := 3;
-
-		cmd.param_kind(1) := PK_ADDR;
-		cmd.param_kind(2) := PK_LEN;    -- delay
-		cmd.param_kind(3) := PK_LEN;    -- delay
-		cmd.wrap_size := 0;
-
-		--------------------------------------------------------------------
-		-- 7. Debug
+		-- 6. Debug
 		--------------------------------------------------------------------
 		if ENABLE_DEBUG_LOG then
-			report "PARSE POLL_PING: addr=0x" & slv_to_hex(cmd.addr) &
+			report "PARSE TEST_ERROR: addr=0x" & slv_to_hex(cmd.addr) &
 				" offset=" & integer'image(cmd.offset) &
-				" delay=" & integer'image(cmd.wait_value) &
-				" timeout=" & integer'image(cmd.timeout)
+				" err_code=0x" & slv_to_hex(cmd.err_code)
 				severity note;
 		end if;
 

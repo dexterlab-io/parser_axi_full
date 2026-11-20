@@ -1,0 +1,22 @@
+INFO: [VRFC 10-163] Analyzing VHDL file "D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/tb/ckrst.vhd" into library work
+INFO: [VRFC 10-3107] analyzing entity 'ckrst'
+INFO: [VRFC 10-163] Analyzing VHDL file "D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/tb/cmd_master.vhd" into library work
+INFO: [VRFC 10-3107] analyzing entity 'cmd_master'
+INFO: [VRFC 10-163] Analyzing VHDL file "D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/tb/arbiter_mux.vhd" into library work
+INFO: [VRFC 10-3107] analyzing entity 'arbiter_mux'
+INFO: [VRFC 10-163] Analyzing VHDL file "D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/tb/axi_full_monitor.vhd" into library work
+INFO: [VRFC 10-3107] analyzing entity 'axi_full_monitor'
+INFO: [VRFC 10-163] Analyzing VHDL file "D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/tb/ram_sync.vhd" into library work
+INFO: [VRFC 10-3107] analyzing entity 'ram_sync'
+INFO: [VRFC 10-163] Analyzing VHDL file "D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/tb/ram_sync_wstrb.vhd" into library work
+INFO: [VRFC 10-3107] analyzing entity 'ram_sync_wstrb'
+INFO: [VRFC 10-163] Analyzing VHDL file "D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/tb/gen_fifo_wr.vhd" into library work
+INFO: [VRFC 10-3107] analyzing entity 'gen_fifo_wr'
+INFO: [VRFC 10-163] Analyzing VHDL file "D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/tb/gen_fifo_rd.vhd" into library work
+INFO: [VRFC 10-3107] analyzing entity 'gen_fifo_rd'
+INFO: [VRFC 10-163] Analyzing VHDL file "D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/tb/gen_fifo.vhd" into library work
+INFO: [VRFC 10-3107] analyzing entity 'gen_fifo'
+INFO: [VRFC 10-163] Analyzing VHDL file "D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/tb/axi_full_slave.vhd" into library work
+INFO: [VRFC 10-3107] analyzing entity 'axi_full_slave'
+INFO: [VRFC 10-163] Analyzing VHDL file "D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/tb/tb_axi_full.vhd" into library work
+INFO: [VRFC 10-3107] analyzing entity 'tb_axi_full'

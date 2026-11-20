@@ -1,0 +1,62 @@
+#-----------------------------------------------------------
+# xsim v2025.1 (64-bit)
+# SW Build 6140274 on Thu May 22 00:12:29 MDT 2025
+# IP Build 6138677 on Thu May 22 03:10:11 MDT 2025
+# SharedData Build 6139179 on Tue May 20 17:58:58 MDT 2025
+# Start of session at: Mon Nov  9 17:47:08 2026
+# Process ID         : 33332
+# Current directory  : D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/sim/vivado/core
+# Command line       : xsim.exe -mode tcl -source {xsim.dir/tb_axi_full_sim/xsim_script.tcl}
+# Log file           : D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/sim/vivado/core/xsim.log
+# Journal file       : D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/sim/vivado/core\xsim.jou
+# Running On         : PC-Kenzo
+# Platform           : Windows Server 2016 or Windows 10
+# Operating System   : 26300
+# Processor Detail   : Intel(R) Core(TM) Ultra 7 255H
+# CPU Frequency      : 3686 MHz
+# CPU Physical cores : 16
+# CPU Logical cores  : 16
+# Host memory        : 33715 MB
+# Swap memory        : 2147 MB
+# Total Virtual      : 35863 MB
+# Available Virtual  : 17013 MB
+#-----------------------------------------------------------
+source xsim.dir/tb_axi_full_sim/xsim_script.tcl
+# xsim {tb_axi_full_sim} -autoloadwcfg -tclbatch {stop_200us.tcl}
+Time resolution is 1 ps
+source stop_200us.tcl
+## run 200 us
+Note: TB START
+Time: 245 ns  Iteration: 1  Process: /tb_axi_full/line__182  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/tb/tb_axi_full.vhd
+Note: ==================== SIMULATION SUMMARY ====================
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note:   PARSE errors:       0
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note:   BASE errors:        0
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note:   FIFO errors:        0
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note:   BURST errors:       0
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note:   WRAP errors:        0
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note:   FILL errors:        0
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note:   POLL errors:        0
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note:   DUMP errors:        0
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note:   AXI errors:         0
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note:   TEST_ERROR errors:  0
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note:   TOTAL EXEC ERRORS = 0
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note:   TOTAL ERRORS      = 0
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note: SIMULATION RESULT: OK
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+Note: ============================================================
+Time: 90905 ns  Iteration: 1  Process: /tb_axi_full/i_cmd_parser/line__1724  File: D:/DexterLab-DesignLibrary/dexterlab-library/parser_axi_full/rtl/cmd_parser.vhd
+## quit
+INFO: [Common 17-206] Exiting xsim at Mon Nov  9 17:47:11 2026...

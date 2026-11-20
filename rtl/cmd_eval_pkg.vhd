@@ -7,7 +7,7 @@
 -- ======================================================================
 --  File: cmd_eval_pkg.vhd
 --  Author: Dexter
---  Date: 2026-09-06
+--  Date: 2026-10-19
 --  Version: 1.0
 -- ======================================================================
 
@@ -124,7 +124,8 @@ package body cmd_eval_pkg is
                 c = CMD_FIFO_READ or
                 c = CMD_BURST_READ or
                 c = CMD_WRAP_READ or
-                c = CMD_POLL_READ);
+                c = CMD_POLL_READ or
+                c = CMD_TEST_ERROR);
     end function;
 
     ----------------------------------------------------------------
@@ -201,8 +202,7 @@ package body cmd_eval_pkg is
 	begin
 		case c is
 			when CMD_POLL_READ |
-				CMD_POLL_TOGGLE |
-				CMD_POLL_PING =>
+				CMD_POLL_TOGGLE =>
 				return true;
 			when others =>
 				return false;
@@ -256,8 +256,9 @@ package body cmd_eval_pkg is
 
             when CMD_READ |
                  CMD_FIFO_READ |
-                 CMD_POLL_READ =>
-                return true;
+                 CMD_POLL_READ |
+                 CMD_TEST_ERROR =>
+                 return true;
 
             when CMD_BURST_READ |
                  CMD_BURST_CHECK |
@@ -676,76 +677,142 @@ package body cmd_eval_pkg is
         result := acc;
     end procedure;
 
-        ----------------------------------------------------------------
-    -- eval_number_u: valuta un numero unsigned generico (dec/hex/bin)
-    ----------------------------------------------------------------
-    procedure eval_number_u(
-        s          : in  t_line;
-        result     : inout unsigned(31 downto 0);
-        eval_error : inout boolean
-    ) is
-        variable str     : string(1 to C_MAX_STRING);
-        variable base    : natural := 10;
-        variable tmp_val : unsigned(31 downto 0) := (others => '0');
-        variable i       : natural := 1;
-        variable c       : character;
-        variable digit   : natural;
-    begin
-        eval_error := false;
-        result     := (others => '0');
+	----------------------------------------------------------------
+	-- eval_number_u: valuta un numero unsigned generico (dec/hex/bin)
+	----------------------------------------------------------------
+	procedure eval_number_u(
+		s          : in  t_line;
+		result     : inout unsigned(31 downto 0);
+		eval_error : inout boolean
+	) is
+		variable str      : string(1 to C_MAX_STRING);
+		variable src      : string(1 to C_MAX_STRING);
+		variable first    : natural := 1;
+		variable last     : natural := 0;
+		variable len      : natural := 0;
 
-        str := line_to_string(s);
+		variable base     : natural := 10;
+		variable tmp_val  : unsigned(31 downto 0) := (others => '0');
+		variable digit    : natural := 0;
+		variable i        : natural := 1;
+		variable c        : character;
+	begin
+		eval_error := false;
+		result     := (others => '0');
 
-        -- Skip leading spaces
-        while i <= C_MAX_STRING and str(i) = ' ' loop
-            i := i + 1;
-        end loop;
+		----------------------------------------------------------------
+		-- Copia e trim come eval_data_u
+		----------------------------------------------------------------
+		src := line_to_string(s);
 
-        -- Detect base
-        if i + 1 <= C_MAX_STRING then
-            if str(i) = '0' and (str(i+1) = 'x' or str(i+1) = 'X') then
-                base := 16;
-                i := i + 2;
-            elsif str(i) = '0' and (str(i+1) = 'b' or str(i+1) = 'B') then
-                base := 2;
-                i := i + 2;
-            end if;
-        end if;
+		-- trim sinistro
+		first := 1;
+		while first <= C_MAX_STRING and src(first) = ' ' loop
+			first := first + 1;
+		end loop;
 
-        -- Parse digits
-        while i <= C_MAX_STRING loop
-            c := str(i);
+		if first > C_MAX_STRING then
+			eval_error := true;
+			return;
+		end if;
 
-            exit when c = ' ' or c = character'val(0);
+		-- trim destro
+		last := C_MAX_STRING;
+		while last >= first and src(last) = ' ' loop
+			last := last - 1;
+		end loop;
 
-            if base = 10 then
-                exit when not (c >= '0' and c <= '9');
-                digit := character'pos(c) - character'pos('0');
-                tmp_val := tmp_val * 10 + to_unsigned(digit, 32);
+		len := last - first + 1;
 
-            elsif base = 16 then
-                if c >= '0' and c <= '9' then
-                    digit := character'pos(c) - character'pos('0');
-                elsif c >= 'A' and c <= 'F' then
-                    digit := character'pos(c) - character'pos('A') + 10;
-                elsif c >= 'a' and c <= 'f' then
-                    digit := character'pos(c) - character'pos('a') + 10;
-                else
-                    eval_error := true;
-                    exit;
-                end if;
-                tmp_val := tmp_val * 16 + to_unsigned(digit, 32);
+		for k in 1 to C_MAX_STRING loop
+			if k <= len then
+				str(k) := src(first + k - 1);
+			else
+				str(k) := ' ';
+			end if;
+		end loop;
 
-            elsif base = 2 then
-                exit when not (c = '0' or c = '1');
-                digit := character'pos(c) - character'pos('0');
-                tmp_val := tmp_val * 2 + to_unsigned(digit, 32);
-            end if;
+		if len = 0 then
+			eval_error := true;
+			return;
+		end if;
 
-            i := i + 1;
-        end loop;
+		----------------------------------------------------------------
+		-- Skip spazi iniziali
+		----------------------------------------------------------------
+		i := 1;
+		while i <= len and str(i) = ' ' loop
+			i := i + 1;
+		end loop;
 
-        result := tmp_val;
-    end procedure;
+		----------------------------------------------------------------
+		-- Detect base
+		----------------------------------------------------------------
+		base := 10;
+
+		if i + 1 <= len then
+			if str(i) = '0' and (str(i+1) = 'x' or str(i+1) = 'X') then
+				base := 16;
+				i := i + 2;
+			elsif str(i) = '0' and (str(i+1) = 'b' or str(i+1) = 'B') then
+				base := 2;
+				i := i + 2;
+			end if;
+		end if;
+
+		----------------------------------------------------------------
+		-- Parse digits con shift+add sicuro
+		----------------------------------------------------------------
+		tmp_val := (others => '0');
+
+		while i <= len loop
+			c := str(i);
+
+			exit when c = ' ';
+
+			if base = 10 then
+				exit when not (c >= '0' and c <= '9');
+				digit := character'pos(c) - character'pos('0');
+
+				-- tmp_val = tmp_val * 10 + digit
+				-- *2 + digit
+				tmp_val := unsigned(shift_left(tmp_val, 1)) + to_unsigned(digit, 32);
+				-- *4
+				tmp_val := unsigned(shift_left(tmp_val, 1));
+				-- *8
+				tmp_val := unsigned(shift_left(tmp_val, 1));
+				-- ora è *10
+
+			elsif base = 16 then
+				if c >= '0' and c <= '9' then
+					digit := character'pos(c) - character'pos('0');
+				elsif c >= 'A' and c <= 'F' then
+					digit := character'pos(c) - character'pos('A') + 10;
+				elsif c >= 'a' and c <= 'f' then
+					digit := character'pos(c) - character'pos('a') + 10;
+				else
+					eval_error := true;
+					return;
+				end if;
+
+				-- tmp_val = tmp_val * 16 + digit
+				tmp_val := unsigned(shift_left(tmp_val, 4)) + to_unsigned(digit, 32);
+
+			elsif base = 2 then
+				exit when not (c = '0' or c = '1');
+				digit := character'pos(c) - character'pos('0');
+
+				-- tmp_val = tmp_val * 2 + digit
+				tmp_val := unsigned(shift_left(tmp_val, 1)) + to_unsigned(digit, 32);
+			end if;
+
+			i := i + 1;
+		end loop;
+
+		----------------------------------------------------------------
+		-- Conversione finale
+		----------------------------------------------------------------
+		result := tmp_val;
+	end procedure;
 
 end package body cmd_eval_pkg;

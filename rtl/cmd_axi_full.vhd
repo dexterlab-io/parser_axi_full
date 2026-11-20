@@ -7,7 +7,7 @@
 -- ======================================================================
 --  File: cmd_axi_full.vhd
 --  Author: Dexter
---  Date: 2026-09-06
+--  Date: 2026-10-22
 --  Version: 1.0
 -- ======================================================================
 
@@ -111,9 +111,10 @@ architecture rtl of cmd_axi_full is
         idle,
         wr_aw,
         wr_w,
-        wr_b,
+        wr_resp,
         rd_ar,
-        rd_r
+        rd_r,
+        rd_resp
     );
 
     signal state_current : t_state := idle;
@@ -191,14 +192,24 @@ architecture rtl of cmd_axi_full is
     --------------------------------------------------------------------
     signal s_err_valid : std_logic := '0';
     signal s_err_code  : std_logic_vector(7 downto 0) := (others => '0');
-    signal s_err_info  : std_logic_vector(31 downto 0) := (others => '0');
+    signal s_err_addr  : std_logic_vector(31 downto 0) := (others => '0');
+    signal s_err_beat  : std_logic_vector(7 downto 0) := (others => '0');
     signal s_err_id    : std_logic_vector(C_ID_WIDTH-1 downto 0) := (others => '0');
 
     --------------------------------------------------------------------
-    -- AXI handshake
+    -- AXI handshake “raw”
     --------------------------------------------------------------------
     signal s_rready : std_logic := '0';
     signal s_bready : std_logic := '0';
+
+    --------------------------------------------------------------------
+    -- AXI handshake “effettivi” (timeout-aware)
+    --------------------------------------------------------------------
+    signal s_rvalid_eff : std_logic := '0';
+    signal s_rlast_eff  : std_logic := '0';
+    signal s_wready_eff : std_logic := '0';
+    signal s_bvalid_eff : std_logic := '0';
+    signal s_is_last_beat : std_logic := '0';
 
     --------------------------------------------------------------------
     -- ACK / fine comando
@@ -216,12 +227,47 @@ architecture rtl of cmd_axi_full is
     --------------------------------------------------------------------
     signal s_ready : std_logic := '0';
 
-    signal s_timeout_cnt : integer range 0 to C_MAX_AXI_TIMEOUT := 0;
+    --------------------------------------------------------------------
+    -- Timeout
+    --------------------------------------------------------------------
+    signal s_timeout_cnt   : integer range 0 to C_MAX_AXI_TIMEOUT := 0;
+    signal s_timeout       : std_logic := '0';
+    signal s_timeout_index : integer range 0 to 255 := 0;
 
+    --------------------------------------------------------------------
+    -- Check burst / boundary
+    --------------------------------------------------------------------
     signal s_4k_check_ok    : std_logic := '1';
     signal s_burst_check_ok : std_logic := '1';
 
+    --------------------------------------------------------------------
+    -- Latch del primo errore del comando
+    --------------------------------------------------------------------
+    signal s_err_seen          : std_logic := '0';
+    signal s_err_addr_latched  : std_logic_vector(31 downto 0) := (others => '0');
+    signal s_err_beat_latched  : std_logic_vector(7 downto 0) := (others => '0');
+    signal s_err_code_latched  : std_logic_vector(7 downto 0) := (others => '0');
+
+	signal s_rd_resp_done : std_logic := '0';
+
 begin
+
+	--------------------------------------------------------------------
+	-- AXI handshake “effettivi” (timeout-aware)
+	--------------------------------------------------------------------
+
+	-- READ: rvalid sintetico
+	s_rvalid_eff <= rvalid or s_timeout;
+
+	-- READ: rlast sintetico (solo sull’ultimo beat)
+	s_is_last_beat <= '1' when (s_burst_index + 1) = s_burst_len_cur else '0';
+	s_rlast_eff    <= rlast or (s_timeout and s_is_last_beat);
+
+	-- WRITE DATA: wready sintetico
+	s_wready_eff <= wready or s_timeout;
+
+	-- WRITE RESP: bvalid sintetico
+	s_bvalid_eff <= bvalid or s_timeout;
 
 
 	--------------------------------------------------------------------
@@ -360,6 +406,91 @@ begin
 		end if;
 	end process;
 
+	--------------------------------------------------------------------
+	-- Timeout management (AXI FULL) - READ & WRITE (sticky per beat)
+	--------------------------------------------------------------------
+	fsm_sync_timeout_proc : process(clk, resetn)
+	begin
+		if resetn = '0' then
+			s_timeout_cnt   <= 0;
+			s_timeout       <= '0';
+			s_timeout_index <= 0;
+
+		elsif rising_edge(clk) then
+
+			----------------------------------------------------------------
+			-- TIMEOUT READ (solo in rd_r)
+			----------------------------------------------------------------
+			if state_current = rd_r then
+
+				-- 1) Beat consumato (reale o sintetico) → reset timeout
+				if s_rvalid_eff = '1' and s_rready = '1' then
+					s_timeout_cnt   <= 0;
+					s_timeout       <= '0';
+					-- NON resetto s_timeout_index: serve per il latch errore
+
+
+				-- 2) Timeout non ancora scattato → incrementa
+				elsif s_timeout = '0' and s_timeout_cnt < C_MAX_AXI_TIMEOUT then
+					s_timeout_cnt <= s_timeout_cnt + 1;
+
+				-- 3) Timeout READ scatta → sticky per questo beat
+				elsif s_timeout = '0' and s_timeout_cnt = C_MAX_AXI_TIMEOUT then
+					s_timeout_cnt   <= 0;
+					s_timeout       <= '1';
+					s_timeout_index <= s_burst_index;
+
+				-- 4) Timeout READ già attivo → resta attivo
+				elsif s_timeout = '1' then
+					s_timeout_cnt <= 0;
+					s_timeout     <= '1';
+				end if;
+
+			----------------------------------------------------------------
+			-- TIMEOUT WRITE (in wr_w e wr_resp)
+			----------------------------------------------------------------
+			elsif state_current = wr_w or state_current = wr_resp then
+
+				-- 1) Beat WRITE consumato (WREADY reale o sintetico)
+				if state_current = wr_w and s_wready_eff = '1' then
+					s_timeout_cnt <= 0;
+					s_timeout     <= '0';
+
+				-- 2) BRESP reale in wr_resp → reset timeout
+				elsif state_current = wr_resp and bvalid = '1' and s_bready = '1' then
+					s_timeout_cnt <= 0;
+					s_timeout     <= '0';
+
+				-- 3) Timeout non ancora scattato → incrementa
+				elsif s_timeout = '0' and s_timeout_cnt < C_MAX_AXI_TIMEOUT then
+					s_timeout_cnt <= s_timeout_cnt + 1;
+
+				-- 4) Timeout WRITE scatta → sticky per questo beat
+				elsif s_timeout = '0' and s_timeout_cnt = C_MAX_AXI_TIMEOUT then
+					s_timeout_cnt   <= 0;
+					s_timeout       <= '1';
+					s_timeout_index <= s_w_index;
+
+				-- 5) Timeout WRITE già attivo → resta attivo
+				elsif s_timeout = '1' then
+					s_timeout_cnt <= 0;
+					s_timeout     <= '1';
+				end if;
+
+			----------------------------------------------------------------
+			-- Altri stati → timeout disattivo
+			----------------------------------------------------------------
+			else
+				s_timeout_cnt   <= 0;
+				s_timeout       <= '0';
+				s_timeout_index <= 0;
+			end if;
+
+		end if;
+	end process;
+
+
+
 
 	--------------------------------------------------------------------
 	-- PROCESSO 1: Registro di stato
@@ -387,6 +518,9 @@ begin
 	begin
 		if resetn = '0' then
 
+			----------------------------------------------------------------
+			-- Reset parametri comando
+			----------------------------------------------------------------
 			s_cmd_id_cur    <= (others => '0');
 			s_addr_cur      <= (others => '0');
 			s_addr_start    <= (others => '0');
@@ -397,7 +531,6 @@ begin
 			s_burst_buf_cur <= (others => (others => '0'));
 
 			s_cmd_is_write  <= '0';
-			s_timeout_cnt   <= 0;
 
 			s_burst_kind    <= BK_SINGLE;
 			s_beat_bytes    <= C_DATA_WIDTH / 8;
@@ -405,37 +538,20 @@ begin
 			s_wrap_base     <= (others => '0');
 			s_start_offset  <= 0;
 
+			----------------------------------------------------------------
+			-- Reset registri READ
+			----------------------------------------------------------------
 			s_rd_valid <= '0';
 			s_rd_last  <= '0';
 			s_rd_data  <= (others => '0');
 			s_rd_id    <= (others => '0');
 
+			----------------------------------------------------------------
+			-- Reset indice WRITE (separato)
+			----------------------------------------------------------------
+			s_w_index <= 0;
+
 		elsif rising_edge(clk) then
-
-			----------------------------------------------------------------
-			-- Timeout counter
-			----------------------------------------------------------------
-			if state_current = rd_r then
-				if rvalid = '1' and s_rready = '1' then
-					s_timeout_cnt <= 0;
-				else
-					if s_timeout_cnt < C_MAX_AXI_TIMEOUT then
-						s_timeout_cnt <= s_timeout_cnt + 1;
-					end if;
-				end if;
-
-			elsif state_current = wr_b then
-				if bvalid = '1' and s_bready = '1' then
-					s_timeout_cnt <= 0;
-				else
-					if s_timeout_cnt < C_MAX_AXI_TIMEOUT then
-						s_timeout_cnt <= s_timeout_cnt + 1;
-					end if;
-				end if;
-
-			else
-				s_timeout_cnt <= 0;
-			end if;
 
 			----------------------------------------------------------------
 			-- Latch del comando (solo se valido e non boundary-cross)
@@ -467,6 +583,7 @@ begin
 					s_addr_cur     <= std_logic_vector(cmd.cmd_addr);
 					s_data_cur     <= cmd.cmd_data(0);
 					s_burst_index  <= 0;
+					s_w_index      <= 0;
 
 					----------------------------------------------------------------
 					-- Decodifica tipo burst
@@ -492,8 +609,8 @@ begin
 						s_wrap_size <= v_len * beat_bytes;
 
 						-- wrap_base = addr & ~(wrap_size - 1)
-						wrap_mask := not to_unsigned((v_len * beat_bytes) - 1, C_ADDR_WIDTH);
-						addr_u    := unsigned(cmd.cmd_addr);
+						wrap_mask   := not to_unsigned((v_len * beat_bytes) - 1, C_ADDR_WIDTH);
+						addr_u      := unsigned(cmd.cmd_addr);
 						wrap_base_u := addr_u and wrap_mask;
 
 						s_wrap_base <= std_logic_vector(wrap_base_u);
@@ -512,13 +629,14 @@ begin
 
 			--------------------------------------------------------------------
 			-- Gestione indice burst lato READ + aggiornamento indirizzo
+			-- Usa i segnali effettivi (timeout-aware)
 			--------------------------------------------------------------------
-			if state_current = rd_r and rvalid = '1' and s_rready = '1' then
+			if state_current = rd_r and s_rready = '1' and s_rvalid_eff = '1' then
 
 				----------------------------------------------------------------
 				-- Aggiornamento indirizzo SOLO per INCR/WRAP, burst > 1, beat NON ultimo
 				----------------------------------------------------------------
-				if s_burst_len_cur > 1 and rlast = '0' then
+				if s_burst_len_cur > 1 and s_rlast_eff = '0' then
 
 					case s_burst_kind is
 
@@ -564,25 +682,46 @@ begin
 				-- Aggiornamento indice SOLO dopo aver aggiornato l’indirizzo
 				----------------------------------------------------------------
 				if s_burst_len_cur > 1 then
-					if rlast = '0' and s_burst_index < s_burst_len_cur - 1 then
+					if s_rlast_eff = '0' and s_burst_index < s_burst_len_cur - 1 then
 						s_burst_index <= s_burst_index + 1;
 					end if;
 				end if;
 
 			end if;
 
+			--------------------------------------------------------------------
+			-- Gestione indice burst lato WRITE (timeout-aware)
+			-- Usa s_wready_eff (WREADY reale o sintetico)
+			--------------------------------------------------------------------
+			if state_current = wr_w and s_wready_eff = '1' then
+				if s_burst_len_cur > 1 then
+					if s_w_index < s_burst_len_cur - 1 then
+						s_w_index <= s_w_index + 1;
+					end if;
+				end if;
+			end if;
+
 			----------------------------------------------------------------
 			-- Registri dati di ritorno (solo READ)
+			-- Caso normale + caso timeout (beat sintetico con dati nulli)
 			----------------------------------------------------------------
+			-- default
 			s_rd_valid <= '0';
+			s_rd_last  <= '0';
 
-			if rvalid = '1' and s_rready = '1' then
+			-- Beat reale → dati validi
+			if s_rvalid_eff = '1' and rvalid = '1' and s_rready = '1' then
 				s_rd_valid <= '1';
-				s_rd_last  <= rlast;
+				s_rd_last  <= s_rlast_eff;   -- last reale o sintetico
 				s_rd_data  <= rdata;
 				s_rd_id    <= rid;
-			else
-				s_rd_last <= '0';
+
+			-- Beat sintetico (timeout) → beat valido con dati nulli
+			elsif s_rvalid_eff = '1' and s_timeout = '1' and s_rready = '1' then
+				s_rd_valid <= '1';
+				s_rd_last  <= s_rlast_eff;   -- last sintetico se ultimo beat
+				s_rd_data  <= x"DEADBEEF";
+				s_rd_id    <= s_cmd_id_cur;
 			end if;
 
 		end if;
@@ -591,239 +730,142 @@ begin
 
 
 
-	--------------------------------------------------------------------
-	-- PROCESSO 3: Generazione risposte (ACK, DONE, ERRORI)
-	--------------------------------------------------------------------
-	fsm_sync_resp_proc : process(clk, resetn)
-	begin
-		if resetn = '0' then
 
-			s_err_valid <= '0';
-			s_err_code  <= (others => '0');
-			s_err_info  <= (others => '0');
-			s_err_id    <= (others => '0');
+--------------------------------------------------------------------
+-- FSM combinatoria AXI (scelta stato successivo) - TIMEOUT AWARE
+--------------------------------------------------------------------
+fsm_comb_proc : process(
+    state_current,
+    valid,
+    cmd,
+    s_ready,
+    s_4k_check_ok,
+    awready,
+    s_wready_eff,
+    s_burst_len_cur,
+    s_w_index,
+    s_cmd_done,
+    arready,
+    s_rvalid_eff,
+    s_rready,
+    s_rlast_eff,
+    s_timeout,
+    s_timeout_index,
+    s_burst_index
+)
+begin
+    state_next <= state_current;
 
-			s_ack       <= '0';
-			s_cmd_done  <= '0';
+    case state_current is
 
-		elsif rising_edge(clk) then
+        ----------------------------------------------------------------
+        -- IDLE
+        ----------------------------------------------------------------
+        when idle =>
+            if valid = '1' and s_ready = '1' then
+                if s_4k_check_ok = '1' then
+                    if cmd.cmd_write = '1' then
+                        state_next <= wr_aw;
+                    else
+                        state_next <= rd_ar;
+                    end if;
+                end if;
+            end if;
 
-			----------------------------------------------------------------
-			-- Default: nessuna risposta
-			----------------------------------------------------------------
-			s_err_valid <= '0';
-			s_ack       <= '0';
-			s_cmd_done  <= '0';
+        ----------------------------------------------------------------
+        -- WRITE ADDRESS
+        ----------------------------------------------------------------
+        when wr_aw =>
+            if awready = '1' then
+                state_next <= wr_w;
+            end if;
 
-			----------------------------------------------------------------
-			-- TIMEOUT
-			----------------------------------------------------------------
-			if s_timeout_cnt = C_MAX_AXI_TIMEOUT then
-				s_err_valid <= '1';
-				s_err_code  <= x"04";  -- TIMEOUT
-				s_err_info  <= (others => '0');
-				s_err_id    <= s_cmd_id_cur;
-
-				s_ack       <= '1';
-				s_cmd_done  <= '1';
-			end if;
-
-			----------------------------------------------------------------
-			-- BOUNDARY_ERR (comando illegale)
-			----------------------------------------------------------------
-			if state_current = idle and valid='1' and s_ready='1' and s_4k_check_ok='0' then
-				s_err_valid <= '1';
-				s_err_code  <= std_logic_vector(to_unsigned(6,8));
-				s_err_info  <= s_addr_cur;
-				s_err_id    <= s_cmd_id_cur;
-
-				s_ack       <= '1';
-				s_cmd_done  <= '1';
-			end if;
-
-			----------------------------------------------------------------
-			-- BURST_ERR (errore semantico burst)
-			----------------------------------------------------------------
-			if state_current = idle and valid='1' and s_ready='1' and s_burst_check_ok='0' then
-				s_err_valid <= '1';
-				s_err_code  <= std_logic_vector(to_unsigned(7,8));  -- BURST_ERR
-				s_err_info  <= s_addr_cur;
-				s_err_id    <= s_cmd_id_cur;
-
-				s_ack       <= '1';
-				s_cmd_done  <= '1';
-			end if;
-
-			----------------------------------------------------------------
-			-- WRITE-family: fine comando su BRESP
-			----------------------------------------------------------------
-			if s_cmd_is_write = '1' then
-				if bvalid = '1' and s_bready = '1' then
-
-					s_ack      <= '1';
-					s_cmd_done <= '1';
-
-					s_err_code <= "000000" & bresp;
-					s_err_id   <= bid;
-
-					if bresp /= "00" then
-						s_err_valid <= '1';
-						s_err_info  <= (others => '0');
+        ----------------------------------------------------------------
+        -- WRITE DATA (timeout-aware)
+        ----------------------------------------------------------------
+        when wr_w =>
+			if s_wready_eff = '1' then
+				if s_timeout = '1' then
+					if s_timeout_index = s_burst_len_cur - 1 then
+						state_next <= wr_resp;
+					end if;
+				else
+					if s_w_index = s_burst_len_cur - 1 then
+						state_next <= wr_resp;
 					end if;
 				end if;
 			end if;
 
-			----------------------------------------------------------------
-			-- READ-family: fine comando su ultimo beat R
-			----------------------------------------------------------------
-			if s_cmd_is_write = '0' then
-				if rvalid = '1' and s_rready = '1' and rlast = '1' then
+        ----------------------------------------------------------------
+        -- WRITE RESPONSE (timeout-aware)
+        ----------------------------------------------------------------
+        when wr_resp =>
+            if s_cmd_done = '1' then
+                if valid = '1' then
+                    if cmd.cmd_write = '1' then
+                        state_next <= wr_aw;
+                    else
+                        state_next <= rd_ar;
+                    end if;
+                else
+                    state_next <= idle;
+                end if;
+            end if;
 
-					s_ack      <= '1';
-					s_cmd_done <= '1';
+        ----------------------------------------------------------------
+        -- READ ADDRESS
+        ----------------------------------------------------------------
+        when rd_ar =>
+            if arready = '1' then
+                state_next <= rd_r;
+            end if;
 
-					s_err_code <= "000000" & rresp;
-					s_err_id   <= rid;
+        ----------------------------------------------------------------
+        -- READ DATA (timeout-aware + index freeze)
+        ----------------------------------------------------------------
+        when rd_r =>
+            if s_rvalid_eff = '1' and s_rready = '1' then
 
-					if rresp /= "00" then
-						s_err_valid <= '1';
-						s_err_info  <= (others => '0');
-					end if;
-				end if;
-			end if;
+                -- Caso normale: usa s_burst_index
+                if s_timeout = '0' then
+                    if s_rlast_eff = '1' and s_burst_index = s_burst_len_cur - 1 then
+                        state_next <= rd_resp;
+                    end if;
 
-		end if;
-	end process;
+                -- Caso timeout: usa s_timeout_index (indice congelato)
+                else
+                    if s_rlast_eff = '1' and s_timeout_index = s_burst_len_cur - 1 then
+                        state_next <= rd_resp;
+                    end if;
+                end if;
+
+            end if;
+
+        ----------------------------------------------------------------
+        -- READ RESPONSE
+        ----------------------------------------------------------------
+        when rd_resp =>
+            if s_cmd_done = '1' then
+                if valid = '1' then
+                    if cmd.cmd_write = '1' then
+                        state_next <= wr_aw;
+                    else
+                        state_next <= rd_ar;
+                    end if;
+                else
+                    state_next <= idle;
+                end if;
+            end if;
+
+    end case;
+
+end process;
 
 
-
-	--------------------------------------------------------------------
-	-- FSM combinatoria AXI (scelta stato successivo)
-	--------------------------------------------------------------------
-	fsm_comb_proc : process(
-		state_current,
-		valid,
-		cmd,              -- record live (solo in IDLE/fine comando)
-		s_ready,
-		s_4k_check_ok,
-		awready,
-		wready,
-		s_burst_len_cur,
-		s_w_index,
-		s_cmd_done,
-		arready
-	)
-	begin
-		state_next <= state_current;
-
-		case state_current is
-
-			----------------------------------------------------------------
-			-- IDLE → decide se WRITE o READ
-			-- Usa dati live per latenza minima di start
-			----------------------------------------------------------------
-			when idle =>
-				if valid = '1' and s_ready = '1' then
-					if s_4k_check_ok = '0' then
-						state_next <= idle;   -- abort
-					else
-						if cmd.cmd_write = '1' then
-							state_next <= wr_aw;
-						else
-							state_next <= rd_ar;
-						end if;
-					end if;
-				end if;
-
-			----------------------------------------------------------------
-			-- WRITE ADDRESS
-			----------------------------------------------------------------
-			when wr_aw =>
-				if awready = '1' then
-					state_next <= wr_w;
-				else
-					state_next <= wr_aw;
-				end if;
-
-			----------------------------------------------------------------
-			-- WRITE DATA
-			----------------------------------------------------------------
-			when wr_w =>
-				if wready = '1' then
-
-					-- SINGLE beat
-					if s_burst_len_cur <= 1 then
-						state_next <= wr_b;
-
-					-- MULTI beat: ultimo beat?
-					elsif s_w_index = s_burst_len_cur - 1 then
-						state_next <= wr_b;
-
-					else
-						state_next <= wr_w;
-					end if;
-
-				else
-					state_next <= wr_w;
-				end if;
-
-			----------------------------------------------------------------
-			-- WRITE RESPONSE
-			-- Fine comando WRITE: aspetta s_cmd_done
-			----------------------------------------------------------------
-			when wr_b =>
-				if s_cmd_done = '1' then
-					if valid = '1' then
-						if cmd.cmd_write = '1' then
-							state_next <= wr_aw;
-						else
-							state_next <= rd_ar;
-						end if;
-					else
-						state_next <= idle;
-					end if;
-				else
-					state_next <= wr_b;
-				end if;
-
-			----------------------------------------------------------------
-			-- READ ADDRESS
-			----------------------------------------------------------------
-			when rd_ar =>
-				if arready = '1' then
-					state_next <= rd_r;
-				else
-					state_next <= rd_ar;
-				end if;
-
-			----------------------------------------------------------------
-			-- READ DATA (corretto)
-			-- Fine comando READ: aspetta s_cmd_done, NON rlast
-			----------------------------------------------------------------
-			when rd_r =>
-				if s_cmd_done = '1' then
-					if valid = '1' then
-						if cmd.cmd_write = '1' then
-							state_next <= wr_aw;
-						else
-							state_next <= rd_ar;
-						end if;
-					else
-						state_next <= idle;
-					end if;
-				else
-					state_next <= rd_r;
-				end if;
-
-			when others =>
-				state_next <= idle;
-
-		end case;
-	end process;
 
 
 	--------------------------------------------------------------------
-	-- Canale AXI WRITE DATA (W): wdata, wvalid, wlast
+	-- Canale AXI WRITE DATA (W): wdata, wvalid, wlast (timeout-aware)
 	--------------------------------------------------------------------
 	axi_w_proc : process(clk, resetn)
 	begin
@@ -832,7 +874,6 @@ begin
 			s_wlast_reg  <= '0';
 			s_wdata_cur  <= (others => '0');
 			s_wstrb_cur  <= (others => '0');
-			s_w_index    <= 0;
 
 		elsif rising_edge(clk) then
 
@@ -843,13 +884,13 @@ begin
 				----------------------------------------------------------------
 				if s_wvalid_reg = '0' then
 					if awready = '1' then
-						s_w_index <= 0;
 
-						-- Dato iniziale
-						s_wdata_cur <= cmd.cmd_data(0);
-						s_wstrb_cur <= cmd.cmd_wstrb;
+						-- Dato iniziale: usa s_w_index = 0
+						s_wdata_cur  <= cmd.cmd_data(s_w_index);
+						s_wstrb_cur  <= cmd.cmd_wstrb;
 						s_wvalid_reg <= '1';
 
+						-- LAST se burst_len = 1 e s_w_index = 0
 						if s_burst_len_cur = 1 then
 							s_wlast_reg <= '1';
 						else
@@ -858,29 +899,33 @@ begin
 					end if;
 
 				----------------------------------------------------------------
-				-- Beat successivi
+				-- Beat successivi (timeout-aware: usa s_wready_eff)
 				----------------------------------------------------------------
-				elsif s_wvalid_reg = '1' and wready = '1' then
+				elsif s_wvalid_reg = '1' and s_wready_eff = '1' then
 
-					----------------------------------------------------------------
-					-- Aggiornamento indice + dati
-					----------------------------------------------------------------
-					if s_w_index < s_burst_len_cur - 1 then
-						s_w_index <= s_w_index + 1;
-						s_wdata_cur <= cmd.cmd_data(s_w_index + 1);
+					-- Se non siamo oltre l’ultimo indice, emetti il beat corrente
+					if s_w_index < s_burst_len_cur then
+
+						s_wdata_cur <= cmd.cmd_data(s_w_index);
 						s_wstrb_cur <= cmd.cmd_wstrb;
 
-						if (s_w_index + 1) = s_burst_len_cur - 1 then
+						-- LAST quando s_w_index = burst_len_cur - 1
+						if s_w_index = s_burst_len_cur - 1 then
 							s_wlast_reg <= '1';
 						else
 							s_wlast_reg <= '0';
 						end if;
 
+						-- Quando abbiamo appena emesso l’ultimo beat, chiudi
+						if s_w_index = s_burst_len_cur - 1 then
+							-- il prossimo ciclo, fuori da wr_w o con wready, spegnerà valid
+							null;
+						end if;
+
 					else
-						-- ultimo beat già emesso: chiudi
+						-- Safety: oltre il burst → chiudi
 						s_wvalid_reg <= '0';
 						s_wlast_reg  <= '0';
-						s_w_index    <= 0;
 						s_wstrb_cur  <= (others => '0');
 					end if;
 
@@ -890,10 +935,9 @@ begin
 				----------------------------------------------------------------
 				-- Fuori da wr_w: chiudi eventuali segnali pendenti
 				----------------------------------------------------------------
-				if s_wvalid_reg = '1' and wready = '1' then
+				if s_wvalid_reg = '1' and s_wready_eff = '1' then
 					s_wvalid_reg <= '0';
 					s_wlast_reg  <= '0';
-					s_w_index    <= 0;
 					s_wstrb_cur  <= (others => '0');
 				end if;
 			end if;
@@ -904,30 +948,46 @@ begin
 
 
 
-    --------------------------------------------------------------------
-    -- Processo di copia del canale W verso il parser (wr_* → s_wr_*)
-    --------------------------------------------------------------------
-    wr_copy_proc : process(clk, resetn)
-    begin
-        if resetn = '0' then
-            s_wr_valid <= '0';
-            s_wr_last  <= '0';
-            s_wr_data  <= (others => '0');
-            s_wr_id    <= (others => '0');
 
-        elsif rising_edge(clk) then
 
-            s_wr_valid <= '0';
-            s_wr_last  <= '0';
+	--------------------------------------------------------------------
+	-- Processo di copia del canale W verso il parser (wr_* → s_wr_*)
+	-- Timeout-aware: usa s_wready_eff
+	--------------------------------------------------------------------
+	wr_copy_proc : process(clk, resetn)
+	begin
+		if resetn = '0' then
+			s_wr_valid <= '0';
+			s_wr_last  <= '0';
+			s_wr_data  <= (others => '0');
+			s_wr_id    <= (others => '0');
 
-            if s_wvalid_reg = '1' and wready = '1' then
-                s_wr_valid <= '1';
-                s_wr_last <= s_wlast_reg;
-                s_wr_data <= s_wdata_cur;
-                s_wr_id   <= s_cmd_id_cur;
-            end if;
-        end if;
-    end process;
+		elsif rising_edge(clk) then
+
+			-- default
+			s_wr_valid <= '0';
+			s_wr_last  <= '0';
+
+			----------------------------------------------------------------
+			-- Copia solo beat REALI (non sintetici)
+			-- Condizioni:
+			--   - s_wvalid_reg = '1'  → il master sta emettendo un beat
+			--   - wready = '1'        → lo slave lo accetta (beat reale)
+			--
+			-- NOTA:
+			--   Non usiamo s_wready_eff qui, perché il timeout NON deve
+			--   generare dati verso il parser. Il timeout serve solo per
+			--   avanzare il burst, non per creare dati fittizi.
+			----------------------------------------------------------------
+			if s_wvalid_reg = '1' and wready = '1' then
+				s_wr_valid <= '1';
+				s_wr_last  <= s_wlast_reg;
+				s_wr_data  <= s_wdata_cur;
+				s_wr_id    <= s_cmd_id_cur;
+			end if;
+
+		end if;
+	end process;
 
 
 	--------------------------------------------------------------------
@@ -978,22 +1038,17 @@ begin
 						awlen <= (others => '0');
 					end if;
 
-					-- Decodifica AXI BURST per WRITE
 					case s_burst_kind is
-						when BK_SINGLE =>
-							s_awburst_reg <= "00";  -- single beat → FIXED
-						when BK_FIFO   =>
-							s_awburst_reg <= "00";  -- FIFO → FIXED
-						when BK_INCR   =>
-							s_awburst_reg <= "01";  -- INCR
-						when BK_WRAP   =>
-							s_awburst_reg <= "10";  -- WRAP
+						when BK_SINGLE => s_awburst_reg <= "00";
+						when BK_FIFO   => s_awburst_reg <= "00";
+						when BK_INCR   => s_awburst_reg <= "01";
+						when BK_WRAP   => s_awburst_reg <= "10";
 					end case;
 
 				----------------------------------------------------------------
 				-- WRITE RESPONSE
 				----------------------------------------------------------------
-				when wr_b =>
+				when wr_resp =>
 					s_bready <= '1';
 
 				----------------------------------------------------------------
@@ -1009,16 +1064,11 @@ begin
 						arlen <= (others => '0');
 					end if;
 
-					-- Decodifica AXI BURST per READ
 					case s_burst_kind is
-						when BK_SINGLE =>
-							s_arburst_reg <= "00";  -- single beat → FIXED
-						when BK_FIFO   =>
-							s_arburst_reg <= "00";  -- FIFO → FIXED
-						when BK_INCR   =>
-							s_arburst_reg <= "01";  -- INCR
-						when BK_WRAP   =>
-							s_arburst_reg <= "10";  -- WRAP
+						when BK_SINGLE => s_arburst_reg <= "00";
+						when BK_FIFO   => s_arburst_reg <= "00";
+						when BK_INCR   => s_arburst_reg <= "01";
+						when BK_WRAP   => s_arburst_reg <= "10";
 					end case;
 
 				----------------------------------------------------------------
@@ -1074,8 +1124,182 @@ begin
 	rready <= s_rready;
 	bready <= s_bready;
 
+
 	--------------------------------------------------------------------
-	-- Uscite verso wrapper: RECORD rsp
+	-- Processo di gestione risposte + errori verso il parser
+	--------------------------------------------------------------------
+	fsm_sync_resp_proc : process(clk, resetn)
+	begin
+		if resetn = '0' then
+
+			s_err_valid <= '0';
+			s_err_code  <= (others => '0');
+			s_err_addr  <= (others => '0');
+			s_err_beat  <= (others => '0');
+			s_err_id    <= (others => '0');
+
+			s_ack       <= '0';
+			s_cmd_done  <= '0';
+
+			-- Latch errori READ
+			s_err_seen         <= '0';
+			s_err_addr_latched <= (others => '0');
+			s_err_beat_latched <= (others => '0');
+			s_err_code_latched <= (others => '0');
+
+			s_rd_resp_done <= '0';
+
+
+		elsif rising_edge(clk) then
+
+			----------------------------------------------------------------
+			-- Default: nessuna risposta (one-shot)
+			----------------------------------------------------------------
+			s_err_valid <= '0';
+			s_err_code  <= (others => '0');
+			s_err_addr  <= (others => '0');
+			s_err_beat  <= (others => '0');
+			s_err_id    <= (others => '0');
+
+			s_ack       <= '0';
+			s_cmd_done  <= '0';
+
+			----------------------------------------------------------------
+			-- IDLE: nuovo comando, reset latch READ
+			----------------------------------------------------------------
+			if state_current = idle then
+
+				s_err_seen         <= '0';
+				s_err_addr_latched <= (others => '0');
+				s_err_beat_latched <= (others => '0');
+				s_err_code_latched <= (others => '0');
+
+				s_rd_resp_done <= '0';
+
+			----------------------------------------------------------------
+			-- BOUNDARY_ERR (comando illegale)
+			----------------------------------------------------------------
+			elsif state_current = idle and valid='1' and s_ready='1' and s_4k_check_ok='0' then
+				s_err_valid <= '1';
+				s_err_code  <= std_logic_vector(to_unsigned(6,8));
+				s_err_addr  <= s_addr_cur;
+				s_err_id    <= s_cmd_id_cur;
+
+				s_ack       <= '1';
+				s_cmd_done  <= '1';
+
+			----------------------------------------------------------------
+			-- BURST_ERR (errore semantico burst)
+			----------------------------------------------------------------
+			elsif state_current = idle and valid='1' and s_ready='1' and s_burst_check_ok='0' then
+				s_err_valid <= '1';
+				s_err_code  <= std_logic_vector(to_unsigned(7,8));
+				s_err_addr  <= s_addr_cur;
+				s_err_id    <= s_cmd_id_cur;
+
+				s_ack       <= '1';
+				s_cmd_done  <= '1';
+
+			----------------------------------------------------------------
+			-- WRITE-family: BRESP + TIMEOUT WRITE (solo in wr_resp)
+			----------------------------------------------------------------
+			elsif s_cmd_is_write = '1' and state_current = wr_resp then
+
+				----------------------------------------------------------------
+				-- Evento di chiusura comando WRITE: bvalid reale o timeout
+				----------------------------------------------------------------
+				if s_bvalid_eff = '1' and s_bready = '1' then
+
+					s_ack      <= '1';
+					s_cmd_done <= '1';
+
+					-- Priorità: BRESP reale
+					if bvalid = '1' then
+						s_err_valid <= '1';
+						s_err_code  <= "000000" & bresp;
+						s_err_id    <= bid;
+						s_err_addr  <= s_addr_cur;
+						s_err_beat  <= (others => '0'); -- beat=0 per WRITE
+
+					-- Timeout WRITE → usa s_timeout_index
+					elsif s_timeout = '1' then
+						s_err_valid <= '1';
+						s_err_code  <= x"04";          -- TIMEOUT
+						s_err_addr  <= s_addr_cur;
+						s_err_beat  <= std_logic_vector(to_unsigned(s_timeout_index, 8));
+						s_err_id    <= s_cmd_id_cur;
+					end if;
+				end if;
+
+			----------------------------------------------------------------
+			-- READ-family: latch errori in rd_r + chiusura in rd_resp
+			----------------------------------------------------------------
+			elsif s_cmd_is_write = '0' then
+
+				----------------------------------------------------------------
+				-- Latch del primo errore READ (per beat) in rd_r
+				----------------------------------------------------------------
+				if state_current = rd_r then
+
+					-- Beat reale: latch rresp != OK
+					if s_rvalid_eff = '1' and rvalid = '1' and s_rready = '1' then
+						if rresp /= "00" and s_err_seen = '0' then
+							s_err_seen         <= '1';
+							s_err_addr_latched <= s_addr_cur;
+							s_err_beat_latched <= std_logic_vector(to_unsigned(s_burst_index, 8));
+							s_err_code_latched <= "000000" & rresp;
+						end if;
+					end if;
+
+					----------------------------------------------------------------
+					-- TIMEOUT READ: latch errore con indice congelato
+					----------------------------------------------------------------
+					if s_timeout = '1' then
+						if s_err_seen = '0' then
+							s_err_seen         <= '1';
+							s_err_addr_latched <= s_addr_cur;
+							s_err_beat_latched <= std_logic_vector(to_unsigned(s_timeout_index, 8));
+							s_err_code_latched <= x"04";  -- TIMEOUT
+						end if;
+					end if;
+				end if;
+
+				----------------------------------------------------------------
+				-- Fine comando READ in rd_resp (ONE‑SHOT)
+				----------------------------------------------------------------
+				if state_current = rd_resp then
+
+					-- Emetti la risposta solo la prima volta
+					if s_rd_resp_done = '0' then
+						s_rd_resp_done <= '1';
+
+						s_ack      <= '1';
+						s_cmd_done <= '1';
+
+						s_err_valid <= '1';
+						s_err_id    <= s_rd_id;  -- ID già registrato nel path R
+
+						if s_err_seen = '0' then
+							-- Nessun errore su tutto il burst
+							s_err_code <= x"00";
+							s_err_addr <= (others => '0');
+							s_err_beat <= (others => '0');
+						else
+							-- I valori veri sono nei latched
+							null;
+						end if;
+					end if;
+
+				end if;
+
+			end if;
+
+		end if;
+	end process;
+
+
+	--------------------------------------------------------------------
+	-- Uscite verso parser
 	--------------------------------------------------------------------
 	rsp_out.rsp_valid <= s_rd_valid when s_cmd_is_write = '0'
 						else s_wr_valid when s_cmd_is_write = '1'
@@ -1090,10 +1314,14 @@ begin
 	rsp_out.rsp_id    <= s_rd_id    when s_cmd_is_write = '0'
 						else s_wr_id;
 
-	rsp_out.rsp_err_valid <= s_cmd_done;
-	rsp_out.rsp_err_code  <= s_err_code;
-	rsp_out.rsp_err_info  <= s_err_info;
+	rsp_out.rsp_end_cmd   <= s_cmd_done;
+	rsp_out.rsp_err_valid <= s_err_valid;
+	rsp_out.rsp_err_code  <= s_err_code_latched when s_err_seen = '1' else s_err_code;
+	rsp_out.rsp_err_addr  <= s_err_addr_latched when s_err_seen = '1' else s_err_addr;
+	rsp_out.rsp_err_beat  <= s_err_beat_latched when s_err_seen = '1' else s_err_beat;
 	rsp_out.rsp_err_id    <= s_err_id;
+
+
 
 end architecture rtl;
 

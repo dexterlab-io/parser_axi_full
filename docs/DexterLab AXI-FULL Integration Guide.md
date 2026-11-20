@@ -1,0 +1,730 @@
+# DexterLab AXI-FULL Integration Guide
+
+(Version 1.2.0)
+
+This document provides guidelines for integrating the DexterLab AXI-FULL backend into AXI-based systems.
+
+It covers:
+
+- Clocking
+- Reset strategy
+- AXI bus integration
+- Memory integration
+- Peripheral integration
+- Arbiter interaction
+- Command interface integration
+- System-level best practices
+
+The AXI-FULL backend is designed to integrate cleanly into AXI4-based verification environments, FPGA systems, and SoC architectures while preserving the standard DexterLab command model.
+
+---
+
+# 1. Architecture Context
+
+The AXI-FULL backend operates within the standard DexterLab architecture:
+
+```text
+Parser / Master
+        |
+        v
+     Arbiter
+        |
+        v
+ AXI-FULL Backend
+        |
+        v
+      AXI4 Bus
+```
+
+The backend receives protocol-independent commands and converts them into AXI4-compliant transactions.
+
+The backend is responsible for protocol execution only.
+
+Command validation, ownership management, and arbitration are handled by external DexterLab components.
+
+---
+
+# 2. Clock and Reset
+
+## 2.1 Clock Domain
+
+The AXI-FULL backend is designed for a single synchronous clock domain.
+
+Requirements:
+
+```text
+Single System Clock
+
+Synchronous Operation
+
+No Internal Clock Domain Crossings
+```
+
+Recommended configuration:
+
+```text
+Parser
+Arbiter
+Backend
+AXI Slave
+```
+
+all operating on the same clock.
+
+If multiple clock domains exist, appropriate CDC mechanisms must be implemented externally.
+
+---
+
+## 2.2 Reset Strategy
+
+Recommended reset configuration:
+
+```text
+Active-High
+
+Synchronous Reset
+```
+
+Requirements:
+
+- Reset clears all backend FSMs
+- Reset clears transaction state
+- Reset clears response state
+- Reset returns the backend to IDLE
+
+The connected AXI slave should use a compatible reset strategy.
+
+---
+
+# 3. AXI Bus Integration
+
+The backend exposes a complete AXI4 master interface.
+
+---
+
+## Write Address Channel
+
+```text
+AWVALID
+AWREADY
+
+AWADDR
+AWLEN
+AWSIZE
+AWBURST
+
+AWPROT
+AWCACHE
+AWQOS
+```
+
+---
+
+## Write Data Channel
+
+```text
+WVALID
+WREADY
+
+WDATA
+WSTRB
+WLAST
+```
+
+---
+
+## Write Response Channel
+
+```text
+BVALID
+BREADY
+
+BRESP
+```
+
+---
+
+## Read Address Channel
+
+```text
+ARVALID
+ARREADY
+
+ARADDR
+ARLEN
+ARSIZE
+ARBURST
+
+ARPROT
+ARCACHE
+ARQOS
+```
+
+---
+
+## Read Data Channel
+
+```text
+RVALID
+RREADY
+
+RDATA
+RRESP
+RLAST
+```
+
+---
+
+# 4. AXI Slave Requirements
+
+The AXI slave should support all protocol features used by the backend.
+
+Mandatory support:
+
+```text
+Single Transfers
+
+Multi-Beat Bursts
+
+INCR Bursts
+
+WSTRB Semantics
+
+Synchronous Operation
+```
+
+Recommended support:
+
+```text
+WRAP Bursts
+
+FIFO Transactions
+
+All Supported Transfer Sizes
+
+Full Burst Length Range
+```
+
+---
+
+# 5. Unsupported AXI Features
+
+The current backend implementation does not require:
+
+```text
+AXI USER Signals
+
+AWUSER
+WUSER
+BUSER
+ARUSER
+RUSER
+```
+
+---
+
+Optional AXI attributes may not be used:
+
+```text
+AWQOS
+ARQOS
+
+AWREGION
+ARREGION
+```
+
+---
+
+Multi-master AXI ID management is not currently required:
+
+```text
+Single Backend Master Model
+```
+
+Unused signals may be tied off or ignored depending on the slave implementation.
+
+---
+
+# 6. RAM Integration
+
+## 6.1 General Recommendations
+
+RAM-based systems should:
+
+- Support synchronous operation
+- Support byte enables
+- Support burst accesses
+- Respect AXI alignment rules
+
+Recommended memory architecture:
+
+```text
+Registered Outputs
+
+Synchronous Read Path
+
+WSTRB-Aware Write Logic
+```
+
+---
+
+## 6.2 Partial Write Support
+
+The AXI-FULL backend directly propagates:
+
+```text
+WSTRB
+```
+
+Therefore RAM logic should correctly support:
+
+```text
+Byte Writes
+
+Halfword Writes
+
+Word Writes
+```
+
+without modifying unaffected bytes.
+
+---
+
+## 6.3 Burst Accesses
+
+Memory subsystems should correctly support:
+
+```text
+INCR Bursts
+
+WRAP Bursts
+```
+
+where applicable.
+
+Wrap bursts must remain inside legal AXI wrapping boundaries.
+
+---
+
+# 7. Peripheral Integration
+
+Peripheral interfaces should be designed with burst behavior in mind.
+
+Requirements depend on peripheral type.
+
+---
+
+## FIFO-Based Peripherals
+
+Examples:
+
+```text
+UART FIFOs
+
+SPI FIFOs
+
+DMA FIFOs
+
+Streaming Buffers
+```
+
+Recommended support:
+
+```text
+FIFO_READ
+
+FIFO_WRITE
+```
+
+using fixed-address semantics.
+
+---
+
+## Register-Based Peripherals
+
+Examples:
+
+```text
+Control Registers
+
+Status Registers
+
+Configuration Blocks
+```
+
+Recommended support:
+
+```text
+READ
+
+WRITE
+
+CHECK
+```
+
+Single-beat accesses are typically sufficient.
+
+---
+
+## Complex AXI Subsystems
+
+Examples:
+
+```text
+DMA Engines
+
+Memory Controllers
+
+Accelerators
+```
+
+Recommended support:
+
+```text
+Bursts
+
+Wraps
+
+WSTRB Handling
+
+Response Handling
+```
+
+---
+
+# 8. Arbiter Integration
+
+The AXI-FULL backend is ownership-agnostic.
+
+Arbitration is performed externally.
+
+---
+
+## Requirements
+
+A compatible arbiter should provide:
+
+```text
+Fair Scheduling
+
+Deterministic Ownership
+
+Command Routing
+
+Response Routing
+```
+
+---
+
+## Response Routing
+
+Responses generated by the backend must be returned to the correct command source.
+
+This includes:
+
+```text
+Parser
+
+Hardware Master
+
+Future Command Sources
+```
+
+through the standard response interfaces.
+
+---
+
+# 9. Locked Command Sequences
+
+The DexterLab architecture supports protected command sequences through:
+
+```text
+cmd_lock
+```
+
+Important:
+
+```text
+cmd_lock does not change AXI timing.
+
+cmd_lock does not change AXI protocol behavior.
+```
+
+The signal is interpreted by the Arbiter.
+
+The Arbiter retains ownership while the protected sequence is executing.
+
+The AXI-FULL backend executes transactions normally.
+
+---
+
+# 10. Interface Integration
+
+The backend integrates through the standardized DexterLab interfaces.
+
+---
+
+## Required Interfaces
+
+### Command Interface
+
+```text
+t_cmd_out
+```
+
+Provides:
+
+```text
+Command Data
+
+Address Information
+
+Burst Attributes
+
+Protocol Attributes
+```
+
+---
+
+### Response Control Interface
+
+```text
+t_rsp_out
+```
+
+Provides:
+
+```text
+rsp_ready
+
+rsp_err_ready
+```
+
+---
+
+### Response Interface
+
+```text
+t_rsp_in
+```
+
+Provides:
+
+```text
+rsp_valid
+
+rsp_data
+
+rsp_err_valid
+
+rsp_err_code
+
+rsp_end_cmd
+```
+
+---
+
+# 11. Command Completion
+
+The backend uses the standard DexterLab completion model.
+
+A command is considered complete only after:
+
+```text
+rsp_end_cmd
+```
+
+has been generated.
+
+Examples:
+
+```text
+Final BRESP Accepted
+        |
+        v
+rsp_end_cmd
+```
+
+```text
+Final RLAST Accepted
+        |
+        v
+rsp_end_cmd
+```
+
+System-level verification should monitor:
+
+```text
+rsp_end_cmd
+```
+
+rather than protocol events alone.
+
+---
+
+# 12. Address Map Strategy
+
+The AXI-FULL backend does not impose any address map.
+
+Address mapping remains the responsibility of the system integrator.
+
+Recommended organization:
+
+```text
+RAM Regions
+
+Peripheral Regions
+
+FIFO Regions
+```
+
+---
+
+Recommended practices:
+
+- Group related peripherals
+- Reserve fixed FIFO addresses
+- Minimize unnecessary address fragmentation
+- Avoid illegal wrap regions
+
+---
+
+# 13. Verification Recommendations
+
+Recommended validation flow:
+
+```text
+DRY_RUN
+        |
+        v
+Generic Backend
+        |
+        v
+AXI-FULL Backend
+        |
+        v
+System Integration
+        |
+        v
+Regression
+```
+
+Validation should include:
+
+```text
+Single Transfers
+
+INCR Bursts
+
+WRAP Bursts
+
+FIFO Transactions
+
+WSTRB Operations
+
+Error Injection
+
+Timeout Testing
+```
+
+---
+
+# 14. Integration Checklist
+
+Before release, verify:
+
+```text
+[ ] Single Clock Domain Verified
+
+[ ] Reset Behavior Verified
+
+[ ] AXI Slave Supports Required Features
+
+[ ] WSTRB Handling Verified
+
+[ ] INCR Bursts Verified
+
+[ ] WRAP Bursts Verified
+
+[ ] FIFO Transactions Verified
+
+[ ] Response Routing Verified
+
+[ ] cmd_lock Behavior Verified
+
+[ ] rsp_end_cmd Verified
+
+[ ] Timeout Handling Verified
+
+[ ] Address Map Reviewed
+
+[ ] Regression Suite Passed
+```
+
+---
+
+# 15. Related Documentation
+
+This document is part of the AXI-FULL backend documentation suite.
+
+Backend documentation:
+
+```text
+DexterLab AXI-FULL Backend.md
+
+DexterLab AXI-FULL Architecture.md
+
+DexterLab AXI-FULL Architecture Diagrams.md
+
+DexterLab AXI-FULL Command Mapping.md
+
+DexterLab AXI-FULL Timing Specification.md
+
+DexterLab AXI-FULL Error Model.md
+```
+
+Core DexterLab documentation:
+
+```text
+Architecture Overview
+
+Command Interface
+
+Arbiter Specification
+
+Design Principles
+
+Verification Methodology
+
+Troubleshooting Guide
+```
+
+---
+
+# 16. Summary
+
+The AXI-FULL backend integrates cleanly into AXI4-based verification environments, FPGA designs, and SoC architectures.
+
+Successful integration requires:
+
+```text
+Correct Clocking
+
+Proper Reset Handling
+
+AXI-Compliant Slaves
+
+Verified Response Routing
+
+Correct Ownership Management
+
+Validated Command Completion
+```
+
+through the standard DexterLab architecture.
+
+The backend provides deterministic, protocol-compliant behavior and serves as the AXI4 execution layer of the DexterLab ecosystem.
+
+---
+
+# End of Document

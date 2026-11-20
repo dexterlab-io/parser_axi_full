@@ -7,7 +7,7 @@
 -- ======================================================================
 --  File: arbiter_mux.vhd
 --  Author: Dexter
---  Date: 2026-09-08
+--  Date: 2026-10-23
 --  Version: 1.0
 -- ======================================================================
 
@@ -94,31 +94,35 @@ begin
     --------------------------------------------------------------------
     -- Clear values
     --------------------------------------------------------------------
-    s_cmd_clear.cmd_write    <= '0';
-    s_cmd_clear.cmd_burst    <= '0';
-    s_cmd_clear.cmd_wrap     <= '0';
-    s_cmd_clear.cmd_fifo     <= '0';
-    s_cmd_clear.cmd_id       <= (others => '0');
-    s_cmd_clear.cmd_len      <= 0;
-    s_cmd_clear.cmd_addr     <= (others => '0');
-    s_cmd_clear.cmd_data     <= (others => (others => '0'));
-    s_cmd_clear.cmd_wstrb    <= (others => '0');
-    s_cmd_clear.cmd_prot	<= (others => '0');
-	s_cmd_clear.cmd_size	<= (others => '0');
-	s_cmd_clear.cmd_lock	<= '0';
-	s_cmd_clear.cmd_cache	<= (others => '0');
-	s_cmd_clear.cmd_qos		<= (others => '0');
+    s_cmd_clear.cmd_write		<= '0';
+    s_cmd_clear.cmd_burst		<= '0';
+    s_cmd_clear.cmd_wrap		<= '0';
+    s_cmd_clear.cmd_fifo		<= '0';
+    s_cmd_clear.cmd_id			<= (others => '0');
+    s_cmd_clear.cmd_len			<= 0;
+    s_cmd_clear.cmd_addr		<= (others => '0');
+    s_cmd_clear.cmd_data		<= (others => (others => '0'));
+    s_cmd_clear.cmd_wstrb		<= (others => '0');
+    s_cmd_clear.cmd_prot		<= (others => '0');
+	s_cmd_clear.cmd_size		<= (others => '0');
+	s_cmd_clear.cmd_lock		<= '0';
+	s_cmd_clear.cmd_cache		<= (others => '0');
+	s_cmd_clear.cmd_qos			<= (others => '0');
+	s_cmd_clear.cmd_err_code	<= (others => '0');
 
-    s_rsp_in_clear.rsp_ready     <= '0';
-    s_rsp_in_clear.rsp_err_ready <= '0';
 
+    s_rsp_in_clear.rsp_ready      <= '0';
+    s_rsp_in_clear.rsp_err_ready  <= '0';
+
+    s_rsp_out_clear.rsp_end_cmd   <= '0';
     s_rsp_out_clear.rsp_valid     <= '0';
     s_rsp_out_clear.rsp_last      <= '0';
     s_rsp_out_clear.rsp_data      <= (others => '0');
     s_rsp_out_clear.rsp_id        <= (others => '0');
     s_rsp_out_clear.rsp_err_valid <= '0';
     s_rsp_out_clear.rsp_err_code  <= (others => '0');
-    s_rsp_out_clear.rsp_err_info  <= (others => '0');
+    s_rsp_out_clear.rsp_err_addr  <= (others => '0');
+    s_rsp_out_clear.rsp_err_beat  <= (others => '0');
     s_rsp_out_clear.rsp_err_id    <= (others => '0');
 
     --------------------------------------------------------------------
@@ -147,7 +151,7 @@ begin
 				s_parser_cmd <=  parser_cmd;
 				s_parser_rsp_in <= parser_rsp_in;
 				s_parser_pending <= '1';
-			elsif state_next = PARSER_ACTIVE and rsp_in.rsp_err_valid = '1' then
+			elsif state_next = PARSER_ACTIVE and rsp_in.rsp_end_cmd = '1' then
 				s_parser_cmd <=  s_cmd_clear;
 				s_parser_rsp_in <= s_rsp_in_clear;
 				s_parser_pending <= '0';
@@ -169,7 +173,7 @@ begin
 				s_master_cmd <=  master_cmd;
 				s_master_rsp_in <= master_rsp_in;
 				s_master_pending <= '1';
-			elsif state_next = MASTER_ACTIVE and rsp_in.rsp_err_valid = '1' then
+			elsif state_next = MASTER_ACTIVE and rsp_in.rsp_end_cmd = '1' then
 				s_master_cmd <=  s_cmd_clear;
 				s_master_rsp_in <= s_rsp_in_clear;
 				s_master_pending <= '0';
@@ -206,9 +210,9 @@ begin
             -- Parser attivo
             ----------------------------------------------------------------
             when PARSER_ACTIVE =>
-				if s_parser_pending = '1' and rsp_in.rsp_err_valid = '0' then
+				if s_parser_pending = '1' and rsp_in.rsp_end_cmd = '0' then
                         state_next <= PARSER_ACTIVE;
-				elsif s_parser_pending = '1' and rsp_in.rsp_err_valid = '1' then
+				elsif s_parser_pending = '1' and rsp_in.rsp_end_cmd = '1' then
                         state_next <= PARSER_ACTIVE;
 				elsif parser_cmd.cmd_lock = '1' then
                     state_next <= PARSER_ACTIVE;
@@ -230,9 +234,9 @@ begin
             -- Master attivo
             ----------------------------------------------------------------
             when MASTER_ACTIVE =>
-				if s_master_pending = '1' and rsp_in.rsp_err_valid = '0' then
+				if s_master_pending = '1' and rsp_in.rsp_end_cmd = '0' then
                         state_next <= MASTER_ACTIVE;
-				elsif s_master_pending = '1' and rsp_in.rsp_err_valid = '1' then
+				elsif s_master_pending = '1' and rsp_in.rsp_end_cmd = '1' then
                         state_next <= MASTER_ACTIVE;
 				elsif master_cmd.cmd_lock = '1' then
                     state_next <= MASTER_ACTIVE;

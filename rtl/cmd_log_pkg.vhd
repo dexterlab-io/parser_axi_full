@@ -7,7 +7,7 @@
 -- ======================================================================
 --  File: cmd_log_pkg.vhd
 --  Author: Dexter
---  Date: 2026-09-06
+--  Date: 2026-10-23
 --  Version: 1.0
 -- ======================================================================
 
@@ -49,35 +49,111 @@ package cmd_log_pkg is
     procedure log_open_read(filename : in string; tag : out natural);
     procedure log_read(tag : in natural; line_out : out t_line);
 
-	impure function log_eof(tag : natural) return boolean;
+    impure function log_eof(tag : natural) return boolean;
 
-	subtype t_err_string is string(1 to 64);
+    subtype t_err_string is string(1 to 64);
 
-	type t_err_info is record
-		msg      : t_err_string;
-		is_error : boolean;
-	end record;
+    type t_err_info is record
+        msg      : t_err_string;
+        is_error : boolean;
+    end record;
 
-	type t_err_info_table is array (0 to 255) of t_err_info;
+    type t_err_info_table is array (0 to 255) of t_err_info;
 
-	constant C_ERR_INFO : t_err_info_table := (
-		0 =>		(msg => "OKAY: Access completed correctly                                ",          is_error => false),
-		1 =>		(msg => "EXOKAY: Exclusive access OK                                     ",          is_error => false),
-		2 =>		(msg => "SLVERR: Slave internal error                                    ",          is_error => true),
-		3 =>		(msg => "DECERR: Address decode error                                    ",          is_error => true),
-		4 =>		(msg => "TIMEOUT: No response from slave                                 ",          is_error => true),
-		5 =>		(msg => "PROT_ERR: AXI protocol violation                                ",          is_error => true),
-		6 =>		(msg => "BOUNDARY_ERR: 4k boundary crossed                               ",          is_error => true),
-		7 =>		(msg => "BURST_ERR: Invalid or crossing burst                            ",          is_error => true),
-		8 =>		(msg => "ID_ERR: ID mismatch                                             ",          is_error => true),
-		others =>	(msg => "USER_DEFINED_ERROR                                              ",          is_error => true)
-	);
+constant C_ERR_INFO : t_err_info_table := (
 
-	procedure decode_err(
-		code      : in  std_logic_vector(7 downto 0);
-		msg       : out t_err_string;
-		is_error  : out boolean
-	);
+    ----------------------------------------------------------------------
+    -- AXI_FULL (0–15)
+    ----------------------------------------------------------------------
+    0  => (msg => "AXI_FULL OKAY           : Access completed correctly            ", is_error => false),
+    1  => (msg => "AXI_FULL EXOKAY         : Exclusive access OK                   ", is_error => false),
+    2  => (msg => "AXI_FULL SLVERR         : Slave internal error                  ", is_error => true),
+    3  => (msg => "AXI_FULL DECERR         : Address decode error                  ", is_error => true),
+    4  => (msg => "AXI_FULL TIMEOUT        : No response from slave                ", is_error => true),
+    5  => (msg => "AXI_FULL PROT_ERR       : Protocol violation                    ", is_error => true),
+    6  => (msg => "AXI_FULL BOUNDARY_ERR   : 4k boundary crossed                   ", is_error => true),
+    7  => (msg => "AXI_FULL BURST_ERR      : Invalid or crossing burst             ", is_error => true),
+    8  => (msg => "AXI_FULL ID_ERR         : ID mismatch                           ", is_error => true),
+    9  => (msg => "AXI_FULL WSTRB_ERR      : Invalid write strobe pattern          ", is_error => true),
+
+    10 => (msg => "AXI_FULL UNKNOWN_ERROR  : Unexpected error 0x0A                 ", is_error => true),
+    11 => (msg => "AXI_FULL UNKNOWN_ERROR  : Unexpected error 0x0B                 ", is_error => true),
+    12 => (msg => "AXI_FULL UNKNOWN_ERROR  : Unexpected error 0x0C                 ", is_error => true),
+    13 => (msg => "AXI_FULL UNKNOWN_ERROR  : Unexpected error 0x0D                 ", is_error => true),
+    14 => (msg => "AXI_FULL UNKNOWN_ERROR  : Unexpected error 0x0E                 ", is_error => true),
+    15 => (msg => "AXI_FULL UNKNOWN_ERROR  : Unexpected error 0x0F                 ", is_error => true),
+
+    ----------------------------------------------------------------------
+    -- AXI_LITE (16–31)
+    ----------------------------------------------------------------------
+    16 => (msg => "AXI_LITE OKAY           : Access completed correctly            ", is_error => false),
+    17 => (msg => "AXI_LITE RESERVED_1     : Reserved                              ", is_error => false),
+    18 => (msg => "AXI_LITE SLVERR         : Slave internal error                  ", is_error => true),
+    19 => (msg => "AXI_LITE DECERR         : Address decode error                  ", is_error => true),
+    20 => (msg => "AXI_LITE TIMEOUT        : No response from slave                ", is_error => true),
+    21 => (msg => "AXI_LITE PROT_ERR       : Protocol violation                    ", is_error => true),
+    22 => (msg => "AXI_LITE BOUNDARY_ERR   : 4k boundary crossed                   ", is_error => true),
+    23 => (msg => "AXI_LITE BURST_ERR      : Invalid or crossing burst             ", is_error => true),
+    24 => (msg => "AXI_LITE ID_ERR         : ID mismatch                           ", is_error => true),
+    25 => (msg => "AXI_LITE WSTRB_ERR      : Invalid write strobe pattern          ", is_error => true),
+
+    26 => (msg => "AXI_LITE UNKNOWN_ERROR  : Unexpected error 0x1A                 ", is_error => true),
+    27 => (msg => "AXI_LITE UNKNOWN_ERROR  : Unexpected error 0x1B                 ", is_error => true),
+    28 => (msg => "AXI_LITE UNKNOWN_ERROR  : Unexpected error 0x1C                 ", is_error => true),
+    29 => (msg => "AXI_LITE UNKNOWN_ERROR  : Unexpected error 0x1D                 ", is_error => true),
+    30 => (msg => "AXI_LITE UNKNOWN_ERROR  : Unexpected error 0x1E                 ", is_error => true),
+    31 => (msg => "AXI_LITE UNKNOWN_ERROR  : Unexpected error 0x1F                 ", is_error => true),
+
+    ----------------------------------------------------------------------
+    -- AHB_FULL (32–47)
+    ----------------------------------------------------------------------
+    32 => (msg => "AHB_FULL OKAY           : Access completed correctly            ", is_error => false),
+    33 => (msg => "AHB_FULL ERROR          : Error response                        ", is_error => true),
+    34 => (msg => "AHB_FULL RETRY          : Retry requested by slave              ", is_error => true),
+    35 => (msg => "AHB_FULL SPLIT          : Split response from slave             ", is_error => true),
+    36 => (msg => "AHB_FULL TIMEOUT        : No response from slave                ", is_error => true),
+    37 => (msg => "AHB_FULL PROT_ERR       : Protocol violation                    ", is_error => true),
+    38 => (msg => "AHB_FULL BOUNDARY_ERR   : 4k boundary crossed                   ", is_error => true),
+    39 => (msg => "AHB_FULL BURST_ERR      : Invalid or crossing burst             ", is_error => true),
+    40 => (msg => "AHB_FULL ID_ERR         : ID mismatch                           ", is_error => true),
+    41 => (msg => "AHB_FULL WSTRB_ERR      : Invalid write strobe pattern          ", is_error => true),
+
+    42 => (msg => "AHB_FULL UNKNOWN_ERROR  : Unexpected error 0x2A                 ", is_error => true),
+    43 => (msg => "AHB_FULL UNKNOWN_ERROR  : Unexpected error 0x2B                 ", is_error => true),
+    44 => (msg => "AHB_FULL UNKNOWN_ERROR  : Unexpected error 0x2C                 ", is_error => true),
+    45 => (msg => "AHB_FULL UNKNOWN_ERROR  : Unexpected error 0x2D                 ", is_error => true),
+    46 => (msg => "AHB_FULL UNKNOWN_ERROR  : Unexpected error 0x2E                 ", is_error => true),
+    47 => (msg => "AHB_FULL UNKNOWN_ERROR  : Unexpected error 0x2F                 ", is_error => true),
+
+    ----------------------------------------------------------------------
+    -- AHB_LITE (48–63)
+    ----------------------------------------------------------------------
+    48 => (msg => "AHB_LITE OKAY           : Access completed correctly            ", is_error => false),
+    49 => (msg => "AHB_LITE ERROR          : Error response                        ", is_error => true),
+    50 => (msg => "AHB_LITE RESERVED_2     : Reserved                              ", is_error => true),
+    51 => (msg => "AHB_LITE RESERVED_3     : Reserved                              ", is_error => true),
+    52 => (msg => "AHB_LITE TIMEOUT        : No response from slave                ", is_error => true),
+    53 => (msg => "AHB_LITE PROT_ERR       : Protocol violation                    ", is_error => true),
+    54 => (msg => "AHB_LITE BOUNDARY_ERR   : 4k boundary crossed                   ", is_error => true),
+    55 => (msg => "AHB_LITE BURST_ERR      : Invalid or crossing burst             ", is_error => true),
+    56 => (msg => "AHB_LITE ID_ERR         : ID mismatch                           ", is_error => true),
+    57 => (msg => "AHB_LITE WSTRB_ERR      : Invalid write strobe pattern          ", is_error => true),
+
+    58 => (msg => "AHB_LITE UNKNOWN_ERROR  : Unexpected error 0x3A                 ", is_error => true),
+    59 => (msg => "AHB_LITE UNKNOWN_ERROR  : Unexpected error 0x3B                 ", is_error => true),
+    60 => (msg => "AHB_LITE UNKNOWN_ERROR  : Unexpected error 0x3C                 ", is_error => true),
+    61 => (msg => "AHB_LITE UNKNOWN_ERROR  : Unexpected error 0x3D                 ", is_error => true),
+    62 => (msg => "AHB_LITE UNKNOWN_ERROR  : Unexpected error 0x3E                 ", is_error => true),
+    63 => (msg => "AHB_LITE UNKNOWN_ERROR  : Unexpected error 0x3F                 ", is_error => true),
+
+    others => (msg => "UNEXPECTED ERROR CODE   : This value is not in the error table  ", is_error => true)
+);
+
+    procedure decode_err(
+        code      : in  std_logic_vector(7 downto 0);
+        msg       : out t_err_string;
+        is_error  : out boolean
+    );
 
 end package cmd_log_pkg;
 
@@ -220,37 +296,37 @@ package body cmd_log_pkg is
         next_tag := tag;
     end procedure;
 
-	impure function log_eof(tag : natural) return boolean is
-	begin
-		case tag is
-			when 0 => return endfile(f0);
-			when 1 => return endfile(f1);
-			when 2 => return endfile(f2);
-			when 3 => return endfile(f3);
-			when 4 => return endfile(f4);
-			when 5 => return endfile(f5);
-			when 6 => return endfile(f6);
-			when 7 => return endfile(f7);
-			when others =>
-				report "log_eof: invalid tag" severity error;
-				return true;
-		end case;
-	end function;
+    impure function log_eof(tag : natural) return boolean is
+    begin
+        case tag is
+            when 0 => return endfile(f0);
+            when 1 => return endfile(f1);
+            when 2 => return endfile(f2);
+            when 3 => return endfile(f3);
+            when 4 => return endfile(f4);
+            when 5 => return endfile(f5);
+            when 6 => return endfile(f6);
+            when 7 => return endfile(f7);
+            when others =>
+                report "log_eof: invalid tag" severity error;
+                return true;
+        end case;
+    end function;
 
-	procedure decode_err(
-		code      : in  std_logic_vector(7 downto 0);
-		msg       : out t_err_string;
-		is_error  : out boolean
-	) is
-		variable idx : natural := to_integer(unsigned(code));
-	begin
-		if idx <= C_ERR_INFO'high then
-			msg      := C_ERR_INFO(idx).msg;
-			is_error := C_ERR_INFO(idx).is_error;
-		else
-			msg      := "UNKNOWN_ERROR                                                   ";
-			is_error := true;
-		end if;
-	end procedure;
+    procedure decode_err(
+        code      : in  std_logic_vector(7 downto 0);
+        msg       : out t_err_string;
+        is_error  : out boolean
+    ) is
+        variable idx : natural := to_integer(unsigned(code));
+    begin
+        if idx <= C_ERR_INFO'high then
+            msg      := C_ERR_INFO(idx).msg;
+            is_error := C_ERR_INFO(idx).is_error;
+        else
+            msg      := "UNKNOWN_ERROR                                                   ";
+            is_error := true;
+        end if;
+    end procedure;
 
 end package body cmd_log_pkg;

@@ -1,33 +1,204 @@
-DexterLab AXI‑Full Backend — Change Log
-This file documents all notable changes introduced in public releases of the
-DexterLab AXI‑Full backend. Entries are listed from newest to oldest.
+# DexterLab AXI-FULL Backend — Change Log
 
-[1.1.0] – 2026‑10‑07
-Updated
-Updated AXI‑Full backend documentation to match the 2026 DexterLab Documentation Suite.
+This file documents all notable changes introduced in public releases of the DexterLab AXI-FULL backend.
 
-Updated GHDL simulation README:
+Entries are listed from newest to oldest.
 
-clarified directory structure
+---
 
-improved instructions for batch and interactive simulation
+# [1.2.0] - 2026-11-16
 
-added details on debug logging and waveform formats
+## Changed
 
-Updated Vivado/XSIM simulation README:
+### Parser Integration
 
-improved environment setup instructions
+Updated backend interfaces to align with the DexterLab Parser v1.1.0 architecture.
 
-clarified GUI requirements
+Updated integration model:
 
-added details on generated files and directory cleanup
+```text
+t_cmd_out
+t_rsp_out
+t_rsp_in
+```
 
-Updated integration notes to align with the new parser documentation structure.
+Updated command completion handling through:
 
-Added
-New documentation pages under docs/:
+```text
+rsp_end_cmd
+```
 
-AXI‑Full Backend Overview
+Updated ownership retention support through:
+
+```text
+cmd_lock
+```
+
+---
+
+### Arbiter Integration
+
+Aligned backend behavior with the current DexterLab arbiter ownership model.
+
+Updated support for:
+
+- Pending command execution
+- Locked command sequences
+- Deterministic command completion
+- Response routing semantics
+
+---
+
+### Error Reporting
+
+Aligned backend responses with the unified DexterLab error model.
+
+Updated response structure:
+
+```text
+rsp_err_valid
+rsp_err_code
+rsp_err_addr
+rsp_err_beat
+rsp_err_id
+```
+
+---
+
+### Documentation
+
+Complete documentation refresh.
+
+Updated:
+
+```text
+Architecture documentation
+
+Backend documentation
+
+Integration documentation
+
+Timing documentation
+
+Error model documentation
+
+Simulation documentation
+```
+
+Documentation aligned with:
+
+```text
+DexterLab v1.1.0 Core Architecture
+```
+
+---
+
+### Naming and Structure
+
+Documentation reorganized to follow the DexterLab 2026 documentation model.
+
+Added references to core documentation instead of duplicating parser architecture and command semantics.
+
+---
+
+## Added
+
+### Architecture Alignment
+
+Support for the standardized execution model:
+
+```text
+Parser / Master
+        |
+        v
+     Arbiter
+        |
+        v
+ AXI-FULL Backend
+        |
+        v
+      AXI4 Bus
+```
+
+---
+
+### Documentation References
+
+Added integration references to:
+
+```text
+Architecture Overview
+
+Design Principles
+
+Versioning and Compatibility
+
+Troubleshooting Guide
+
+Verification Methodology
+```
+
+from the main DexterLab documentation suite.
+
+---
+
+## Validation
+
+Validated through:
+
+- GHDL simulation
+- Vivado / XSIM simulation
+- Burst transfers
+- Wrap transfers
+- FIFO transactions
+- Parser integration tests
+- Arbiter integration tests
+- Error propagation tests
+
+---
+
+## Compatibility
+
+Compatible with:
+
+```text
+DexterLab Parser v1.1.0
+```
+
+No command-file migration required.
+
+---
+
+# [1.1.0] - 2026-10-07
+
+## Updated
+
+Updated AXI-FULL backend documentation to match the DexterLab 2026 Documentation Suite.
+
+Updated GHDL simulation documentation:
+
+- Clarified directory structure
+- Improved batch simulation instructions
+- Extended waveform documentation
+- Added debug logging information
+
+Updated Vivado / XSIM documentation:
+
+- Improved environment setup instructions
+- Clarified GUI usage
+- Added generated-file documentation
+- Improved cleanup procedures
+
+Updated backend integration notes.
+
+---
+
+## Added
+
+New documentation pages:
+
+```text
+AXI-FULL Backend Overview
 
 Testbench Architecture
 
@@ -42,14 +213,23 @@ Parser Engine Internals
 Address Map
 
 Arbiter Specification
+```
 
-New VERSION.md file describing backend versioning.
+Added:
 
-New release packaging structure aligned with DexterLab 2026 standards.
+```text
+VERSION.md
+```
 
-Removed
-Legacy wrapper documentation:
+Added standardized release packaging structure.
 
+---
+
+## Removed
+
+Removed deprecated wrapper documentation:
+
+```text
 cmd_wrapper_ahb_full.md
 
 cmd_wrapper_ahb_lite.md
@@ -57,58 +237,147 @@ cmd_wrapper_ahb_lite.md
 cmd_wrapper_axi_full.md
 
 cmd_wrapper_axi_lite.md
+```
 
-Deprecated integration notes replaced by updated backend documentation.
+Removed legacy integration notes.
 
-Notes
-This release aligns the AXI‑Full backend with the updated DexterLab documentation ecosystem.
-All simulation environments (GHDL and Vivado/XSIM) have been refreshed and validated.
-The backend RTL remains stable and fully compatible with the DexterLab Parser v1.1.0.
+---
 
-[1.0.0] – 2026‑09‑10
-Added
-Initial public release of the AXI‑Full backend.
+## Notes
 
-Complete AXI‑Full RTL implementation:
+RTL remained unchanged.
 
-Multi‑beat burst engine (INCR, FIFO, WRAP).
+Validated using:
 
-AXI write and read channel logic (AW, W, B, AR, R).
+- GHDL
+- Vivado / XSIM
+- Burst tests
+- FIFO tests
+- Wrap tests
+- Parser integration tests
 
-Address generation and wrap boundary handling.
+Compatible with:
 
-Byte‑enable propagation and WSTRB support.
+```text
+DexterLab Parser v1.1.0
+```
 
-Integration with DexterLab parser core (version: parser_core v1.0.0).
+---
 
-Full AXI testbench (tb_axi.vhd) including:
+# [1.0.0] - 2026-09-10
 
-AXI monitor
+## Added
 
-simple AXI slave model
+Initial public release of the AXI-FULL backend.
 
-FIFO generators
+Implemented:
 
-synchronous RAM models
+```text
+AXI Write Channel
 
-GHDL simulation environment (Makefile, waveform generation, debug logging).
+AXI Read Channel
 
-Vivado/XSIM simulation environment (xvhdl/xelab/xsim flow).
+Burst Engine
 
-Complete documentation under docs/:
+Wrap Addressing
 
-AXI‑Full architecture
+FIFO Transactions
 
-command mapping
+WSTRB Propagation
 
-timing and handshake rules
+Response Handling
+```
 
-error model
+---
 
-integration guidelines
+### Parser Integration
 
-simulation guides (GHDL and Vivado)
+Integrated with:
 
-Notes
-This is the first standalone release of the AXI‑Full backend.
-The backend is stable and fully validated through both GHDL and Vivado simulations.
+```text
+parser_core v1.0.0
+```
+
+Direct parser-to-backend connection.
+
+No wrapper layer required.
+
+---
+
+### Testbench Environment
+
+Added:
+
+```text
+tb_axi.vhd
+
+AXI Monitor
+
+AXI Slave Model
+
+FIFO Generators
+
+RAM Models
+```
+
+---
+
+### Simulation Support
+
+GHDL environment:
+
+- Makefile workflow
+- Waveform generation
+- Debug logging
+
+Vivado / XSIM environment:
+
+- xvhdl
+- xelab
+- xsim
+- GUI support
+
+---
+
+### Documentation
+
+Initial documentation set:
+
+```text
+AXI-FULL Architecture
+
+Command Mapping
+
+Timing Specification
+
+Error Model
+
+Integration Guide
+
+Simulation Guides
+```
+
+---
+
+## Validation
+
+Validated through:
+
+- GHDL simulation
+- Vivado / XSIM simulation
+- Burst testing
+- FIFO testing
+- Wrap testing
+- Parser integration testing
+
+---
+
+## Notes
+
+First standalone release of the AXI-FULL backend.
+
+Backend considered stable for simulation, verification and integration activities.
+
+---
+
+# End of File

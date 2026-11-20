@@ -7,7 +7,7 @@
 -- ======================================================================
 --  File: cmd_split_pkg.vhd
 --  Author: Dexter
---  Date: 2026-09-06
+--  Date: 2026-10-19
 --  Version: 1.0
 -- ======================================================================
 
@@ -350,8 +350,7 @@ package body cmd_split_pkg is
 		-- POLL
 		----------------------------------------------------------------
 		if cmd.command = CMD_POLL_READ or
-		cmd.command = CMD_POLL_TOGGLE or
-		cmd.command = CMD_POLL_PING then
+		cmd.command = CMD_POLL_TOGGLE then
 
 			mc := mc_clear;
 
@@ -376,14 +375,33 @@ package body cmd_split_pkg is
 				mc.data_array := cmd.data_array;   -- mask in data_array(0)
 				mc.data       := (others => '0');  -- non usato
 
-			elsif cmd.command = CMD_POLL_PING then
-				-- nessun expected, nessuna mask
-				mc.data_array := (others => (others => '0'));
-				mc.data       := (others => '0');
 			end if;
 
 			mc.wait_value := cmd.wait_value;   -- delay tra retry
 			mc.timeout    := cmd.timeout;      -- ⭐ numero massimo retry
+
+			mc_list_o(0) := mc;
+			mc_count_o   := 1;
+			return;
+		end if;
+
+		----------------------------------------------------------------
+		-- TEST_ERROR
+		----------------------------------------------------------------
+		if cmd.command = CMD_TEST_ERROR then
+			mc := mc_clear;
+			mc.cmd_type := CMD_TEST_ERROR;
+			mc.cmd_id   := to_unsigned(0, C_ID_WIDTH);
+
+			mc.addr     := addr_add_offset(cmd.addr, cmd.offset);
+			mc.len      := 1;
+
+			-- expected error code
+			mc.err_code := cmd.err_code;
+
+			-- no data, no mask
+			mc.data_array := (others => (others => '0'));
+			mc.data       := (others => '0');
 
 			mc_list_o(0) := mc;
 			mc_count_o   := 1;

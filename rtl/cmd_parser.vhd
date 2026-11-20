@@ -7,7 +7,7 @@
 -- ======================================================================
 --  File: cmd_parser.vhd
 --  Author: Dexter
---  Date: 2026-09-10
+--  Date: 2026-11-04
 --  Version: 1.0
 -- ======================================================================
 
@@ -84,22 +84,23 @@ architecture rtl of cmd_parser is
     --------------------------------------------------------------------
     signal s_cmd_valid : std_logic := '0';
 
-    signal s_cmd_out : t_cmd_out := (
-        cmd_write  => '0',
-        cmd_burst  => '0',
-        cmd_wrap   => '0',
-        cmd_fifo   => '0',
-        cmd_id     => (others => '0'),
-        cmd_addr   => (others => '0'),
-        cmd_len    => 0,
-        cmd_data   => (others => (others => '0')),
-        cmd_wstrb  => (others => '0'),
-        cmd_prot   => (others => '0'),
-        cmd_size   => (others => '0'),
-        cmd_lock   => '0',
-        cmd_cache  => (others => '0'),
-        cmd_qos    => (others => '0')
-    );
+	signal s_cmd_out : t_cmd_out := (
+		cmd_write  => '0',
+		cmd_burst  => '0',
+		cmd_wrap   => '0',
+		cmd_fifo   => '0',
+		cmd_id     => (others => '0'),
+		cmd_addr   => (others => '0'),
+		cmd_len    => 0,
+		cmd_data   => (others => (others => '0')),
+		cmd_wstrb  => (others => '0'),
+		cmd_prot   => (others => '0'),
+		cmd_size   => (others => '0'),
+		cmd_lock   => '0',
+		cmd_cache  => (others => '0'),
+		cmd_qos    => (others => '0'),
+		cmd_err_code => (others => '0')
+	);
 
     signal s_rsp_out : t_rsp_out := (
         rsp_ready     => '0',
@@ -144,12 +145,13 @@ architecture rtl of cmd_parser is
     signal s_wait_timeout : std_logic := '0';
     signal s_wait_count   : unsigned(31 downto 0) := (others => '0');
 
-    signal s_poll_timeout      : std_logic := '0';
+    signal s_poll_retry_max    : std_logic := '0';
     signal s_poll_value        : std_logic_vector(C_DATA_WIDTH-1 downto 0);
     signal s_poll_masked_value : std_logic_vector(C_DATA_WIDTH-1 downto 0);
     signal s_poll_last_value   : std_logic_vector(C_DATA_WIDTH-1 downto 0);
 
     signal s_poll_retry_next  : std_logic := '0';
+    signal s_poll_retry_reg : std_logic := '0';
     signal s_poll_delay_count : integer := 0;
     signal s_poll_retry_count : integer := 0;
 
@@ -214,6 +216,12 @@ architecture rtl of cmd_parser is
     signal s_ack_data_last : std_logic := '0';
     signal s_ack_err       : std_logic := '0';
     signal s_ack_end       : std_logic := '0';
+
+    signal s_end_data      : std_logic := '0';
+    signal s_end_cmd       : std_logic := '0';
+
+	signal s_test_error        : boolean := false;
+	signal s_test_error_count  : natural := 0;
 
 begin
 
@@ -501,6 +509,9 @@ begin
         end if;
     end process;
 
+	--------------------------------------------------------------------
+	-- ACK + END-DATA + END-CMD
+	--------------------------------------------------------------------
 	process(rsp_in)
 		variable err_msg  : t_err_string;
 		variable err_flag : boolean;
@@ -511,6 +522,7 @@ begin
 		else
 			s_ack_data <= '0';
 		end if;
+
 		-- ACK dati last (READ/WRITE)
 		if rsp_in.rsp_valid = '1' and rsp_in.rsp_last = '1' then
 			s_ack_data_last <= '1';
@@ -518,9 +530,8 @@ begin
 			s_ack_data_last <= '0';
 		end if;
 
-		-- ACK errore (READ/WRITE)
+		-- ACK errore (decodifica del code)
 		if rsp_in.rsp_err_valid = '1' then
-			-- decodifica errore tramite tabella
 			decode_err(rsp_in.rsp_err_code, err_msg, err_flag);
 			if err_flag then
 				s_ack_err <= '1';
@@ -528,17 +539,30 @@ begin
 				s_ack_err <= '0';
 			end if;
 		else
-			-- nessun errore in questo ciclo
 			s_ack_err <= '0';
 		end if;
 
-		-- ACK end
-		if rsp_in.rsp_err_valid = '1' then
-			s_ack_end <= '1';
+		----------------------------------------------------------------
+		-- END-DATA (ultimo beat)
+		----------------------------------------------------------------
+		if rsp_in.rsp_valid = '1' and rsp_in.rsp_last = '1' then
+			s_end_data <= '1';
 		else
-			s_ack_end <= '0';
+			s_end_data <= '0';
 		end if;
+
+		----------------------------------------------------------------
+		-- ⭐ END-CMD (nuova semantica)
+		-- Ora usiamo direttamente rsp_end_cmd
+		----------------------------------------------------------------
+		if rsp_in.rsp_end_cmd = '1' then
+			s_end_cmd <= '1';
+		else
+			s_end_cmd <= '0';
+		end if;
+
 	end process;
+
 
 	--------------------------------------------------------------------
 	-- PROCESSO: FSM_COMBINATORIA — calcolo di state_next (versione AXI-like)
@@ -555,6 +579,7 @@ begin
 		s_wait_done,
 		s_poll_delay_count,
 		s_poll_retry_next,
+		s_poll_retry_reg,
 		cmd_ready,          -- ⭐ accettazione comando
 		rsp_in,             -- ⭐ completamento comando (solo per rsp_valid)
 		s_include_depth,
@@ -563,7 +588,7 @@ begin
 		s_ack_data,
 		s_ack_data_last,
 		s_ack_err,
-		s_ack_end
+		s_end_cmd
 	)
 	begin
 		-- default
@@ -624,7 +649,8 @@ begin
 						when CMD_READ |
 							CMD_WRITE |
 							CMD_CHECK |
-							CMD_WSTRB_WRITE =>
+							CMD_WSTRB_WRITE |
+							CMD_TEST_ERROR =>
 							state_next <= exec_base;
 
 						when CMD_STOP =>
@@ -659,8 +685,7 @@ begin
 							state_next <= exec_dump;
 
 						when CMD_POLL_READ |
-							CMD_POLL_TOGGLE |
-							CMD_POLL_PING    =>
+							CMD_POLL_TOGGLE =>
 							state_next <= exec_poll;
 
 						when CMD_END_SIM      =>
@@ -698,10 +723,10 @@ begin
 				end if;
 
 			----------------------------------------------------------------
-			-- BASE → READ / WRITE / CHECK (single beat)
+			-- BASE → READ / WRITE / CHECK / TEST_ERROR (single beat)
 			----------------------------------------------------------------
 			when exec_base =>
-				if s_ack_end = '1' then
+				if s_end_cmd = '1' then
 					state_next <= next_cmd;
 				else
 					state_next <= exec_base;
@@ -711,7 +736,7 @@ begin
 			-- FIFO
 			----------------------------------------------------------------
 			when exec_fifo =>
-				if s_ack_end = '1' then
+				if s_end_cmd = '1' then
 					state_next <= next_cmd;
 				else
 					state_next <= exec_fifo;
@@ -721,7 +746,7 @@ begin
 			-- BURST
 			----------------------------------------------------------------
 			when exec_burst =>
-				if s_ack_end = '1' then
+				if s_end_cmd = '1' then
 					state_next <= next_cmd;
 				else
 					state_next <= exec_burst;
@@ -731,7 +756,7 @@ begin
 			-- WRAP
 			----------------------------------------------------------------
 			when exec_wrap =>
-				if s_ack_end = '1' then
+				if s_end_cmd = '1' then
 					state_next <= next_cmd;
 				else
 					state_next <= exec_wrap;
@@ -741,7 +766,7 @@ begin
 			-- FILL
 			----------------------------------------------------------------
 			when exec_fill =>
-				if s_ack_end = '1' then
+				if s_end_cmd = '1' then
 					state_next <= next_cmd;
 				else
 					state_next <= exec_fill;
@@ -752,24 +777,17 @@ begin
 			----------------------------------------------------------------
 			when exec_poll =>
 
-				-- 1) AXI_FULL ha prodotto la risposta dati
-				if rsp_in.rsp_valid = '1' then
+				-- aspetta fine comando (s_end_cmd)
+				if s_end_cmd = '1' then
 
-					-- 2) risposta completa (OKAY o errore)
-					if s_ack_end = '1' then
-
-						if s_poll_retry_next = '0' then
-							state_next <= next_cmd;
-						else
-							state_next <= exec_poll_wait;
-						end if;
-
+					if (s_poll_retry_next = '0' and s_poll_retry_reg = '0') then
+						state_next <= next_cmd;        -- DONE
 					else
-						state_next <= exec_poll;   -- aspetta fine comando
+						state_next <= exec_poll_wait;  -- RETRY
 					end if;
 
 				else
-					state_next <= exec_poll;       -- aspetta rsp_valid
+					state_next <= exec_poll;           -- ancora in corso
 				end if;
 
 			----------------------------------------------------------------
@@ -786,7 +804,7 @@ begin
 			-- DUMP
 			----------------------------------------------------------------
 			when exec_dump =>
-				if s_ack_end = '1' then
+				if s_end_cmd = '1' then
 					state_next <= next_cmd;
 				else
 					state_next <= exec_dump;
@@ -815,7 +833,8 @@ begin
 						when CMD_READ |
 							CMD_WRITE |
 							CMD_CHECK |
-							CMD_WSTRB_WRITE =>
+							CMD_WSTRB_WRITE |
+							CMD_TEST_ERROR =>
 							state_next <= exec_base;
 
 						when CMD_STOP =>
@@ -842,8 +861,7 @@ begin
 							state_next <= exec_fill;
 
 						when CMD_POLL_READ |
-							CMD_POLL_TOGGLE |
-							CMD_POLL_PING    =>
+							CMD_POLL_TOGGLE =>
 							state_next <= exec_poll;
 
 						when CMD_DUMP_LEN |
@@ -880,6 +898,7 @@ begin
 
 		end case;
 	end process;
+
 
 
 
@@ -934,23 +953,26 @@ begin
 		-- Default (parcheggio)
 		----------------------------------------------------------------
 
-		s_cmd_out.cmd_write		<= '0';
-		s_cmd_out.cmd_burst		<= '0';
-		s_cmd_out.cmd_wrap		<= '0';
-		s_cmd_out.cmd_fifo		<= '0';
+		s_cmd_out.cmd_write   <= '0';
+		s_cmd_out.cmd_burst   <= '0';
+		s_cmd_out.cmd_wrap    <= '0';
+		s_cmd_out.cmd_fifo    <= '0';
 
-		s_cmd_out.cmd_id		<= s_mc_cur.cmd_id;
-		s_cmd_out.cmd_addr		<= s_mc_cur.addr;
-		s_cmd_out.cmd_len		<= s_mc_cur.len;
-		s_cmd_out.cmd_data		<= s_mc_cur.data_array;
+		s_cmd_out.cmd_id      <= s_mc_cur.cmd_id;
+		s_cmd_out.cmd_addr    <= s_mc_cur.addr;
+		s_cmd_out.cmd_len     <= s_mc_cur.len;
+		s_cmd_out.cmd_data    <= s_mc_cur.data_array;
 
-		s_cmd_out.cmd_wstrb		<= (others => '1');
+		s_cmd_out.cmd_wstrb   <= (others => '1');
 
-		s_cmd_out.cmd_prot		<= (others => '0');
-		s_cmd_out.cmd_size		<= (others => '0');
-		s_cmd_out.cmd_lock		<= s_atomic;
-		s_cmd_out.cmd_cache		<= (others => '0');
-		s_cmd_out.cmd_qos		<= (others => '0');
+		s_cmd_out.cmd_prot    <= (others => '0');
+		s_cmd_out.cmd_size    <= (others => '0');
+		s_cmd_out.cmd_lock    <= s_atomic;
+		s_cmd_out.cmd_cache   <= (others => '0');
+		s_cmd_out.cmd_qos     <= (others => '0');
+
+		-- ⭐ default: nessun errore atteso
+		s_cmd_out.cmd_err_code <= (others => '0');
 
 		----------------------------------------------------------------
 		-- Decodifica del comando corrente
@@ -958,13 +980,13 @@ begin
 		case state_current is
 
 			----------------------------------------------------------------
-			-- PRINT / ATOMIC / WAIT → nessun accesso AXI
+			-- PRINT / ATOMIC / WAIT / STOP → nessun accesso AXI
 			----------------------------------------------------------------
-			when exec_print | exec_atomic | exec_wait | exec_stop=>
+			when exec_print | exec_atomic | exec_wait | exec_stop =>
 				null;
 
 			----------------------------------------------------------------
-			-- BASE → READ / WRITE / CHECK / WSTRB_WRITE (single beat)
+			-- BASE → READ / WRITE / CHECK / WSTRB_WRITE / TEST_ERROR (single beat)
 			----------------------------------------------------------------
 			when exec_base =>
 
@@ -976,13 +998,20 @@ begin
 					s_cmd_out.cmd_write <= '0';
 				end if;
 
-				-- ⭐ WSTRB
+				-- WSTRB
 				if s_mc_cur.cmd_type = CMD_WSTRB_WRITE then
 					s_cmd_out.cmd_wstrb <= std_logic_vector(
 						to_unsigned(s_mc_cur.byte_enable, C_DATA_WIDTH/8)
 					);
 				else
 					s_cmd_out.cmd_wstrb <= (others => '1');
+				end if;
+
+				-- ⭐ TEST_ERROR: imposta il codice errore atteso
+				if s_mc_cur.cmd_type = CMD_TEST_ERROR then
+					s_cmd_out.cmd_err_code <= s_mc_cur.err_code;
+				else
+					s_cmd_out.cmd_err_code <= (others => '0');
 				end if;
 
 			----------------------------------------------------------------
@@ -1062,6 +1091,7 @@ begin
 	end process;
 
 
+
 	--------------------------------------------------------------------
 	-- PROCESSO: LOGICA_SINCRONA_ATOMIC
 	--------------------------------------------------------------------
@@ -1123,78 +1153,72 @@ begin
 	end process;
 
 	--------------------------------------------------------------------
-	-- COMBINATORIO: s_poll_retry_next (versione AXI-like pulita)
+	-- COMBINATORIO: s_poll_retry_next (versione corretta / chiarita)
+	-- - MAX_RETRY: su retry_count (NON timeout di bus)
+	-- - Errore: su rsp_err_code (SLVERR/DECERR)
+	-- - Decisione DONE/RETRY: su ULTIMO BEAT DATI (s_ack_data_last, rsp_data)
 	--------------------------------------------------------------------
 	process(rsp_in, s_mc_cur, s_poll_last_value, s_poll_retry_count,
-			s_ack_data, s_ack_data_last, s_ack_err, s_ack_end)
+			s_ack_data, s_ack_data_last, s_ack_err, s_end_cmd, s_poll_value)
 		variable mask_v          : std_logic_vector(C_DATA_WIDTH-1 downto 0);
 		variable masked_v        : std_logic_vector(C_DATA_WIDTH-1 downto 0);
 		variable expected_v      : std_logic_vector(C_DATA_WIDTH-1 downto 0);
-		variable timeout_v       : natural;
+		variable max_retry_v     : natural;
 		variable retry_next_v    : std_logic := '0';
 		variable do_normal_logic : boolean := true;
 	begin
 		----------------------------------------------------------------
-		-- Calcolo limite timeout
+		-- Limite MAX_RETRY
 		----------------------------------------------------------------
 		if s_mc_cur.timeout = 0 then
-			timeout_v := C_MAX_TIMEOUT;
+			max_retry_v := C_MAX_TIMEOUT;
 		else
-			timeout_v := s_mc_cur.timeout;
+			max_retry_v := s_mc_cur.timeout;
 		end if;
 
 		retry_next_v    := '0';
 		do_normal_logic := true;
 
 		----------------------------------------------------------------
-		-- 1) TIMEOUT (priorità assoluta)
+		-- 1) MAX_RETRY raggiunto (priorità assoluta)
 		----------------------------------------------------------------
 		if s_mc_cur.cmd_type = CMD_POLL_TOGGLE then
-			-- TOGGLE: timeout = retry_count > timeout_v
-			if s_poll_retry_count > timeout_v then
+			if s_poll_retry_count > max_retry_v then
 				retry_next_v    := '0';
 				do_normal_logic := false;
 			end if;
 		else
-			-- READ / PING: timeout = retry_count >= timeout_v
-			if s_poll_retry_count >= timeout_v then
+			if s_poll_retry_count >= max_retry_v then
 				retry_next_v    := '0';
 				do_normal_logic := false;
 			end if;
 		end if;
 
 		----------------------------------------------------------------
-		-- 2) ERRORE AXI (seconda priorità)
-		-- NON richiede rsp_valid
+		-- 2) ERRORE AXI/AHB (seconda priorità)
 		----------------------------------------------------------------
 		if do_normal_logic = true then
-			if s_ack_err = '1' then   -- ⭐ usa segnale centralizzato
-
-				if s_mc_cur.cmd_type = CMD_POLL_PING then
-					retry_next_v := '1';   -- periferica non pronta → retry
-				else
-					retry_next_v := '0';   -- READ / TOGGLE → STOP immediato
-				end if;
-
+			if s_ack_err = '1' then
+				-- READ / TOGGLE → STOP immediato
+				retry_next_v    := '0';
 				do_normal_logic := false;
 			end if;
 		end if;
 
 		----------------------------------------------------------------
-		-- 3) NORMAL LOGIC (solo se non timeout e non errore)
+		-- 3) NORMAL LOGIC (solo se non MAX_RETRY e non errore)
 		----------------------------------------------------------------
 		if do_normal_logic = true then
-			-- ⭐ AXI-like: ack = risposta completa (data OR err)
-			-- ma per POLL serve anche rsp_valid (dati)
-			if s_ack_end = '1' and rsp_in.rsp_valid = '1' then
 
-				mask_v   := s_mc_cur.data_array(0);
-				masked_v := rsp_in.rsp_data AND mask_v;
+			if s_ack_data_last = '1' then
 
-				----------------------------------------------------------------
+				mask_v := s_mc_cur.data_array(0);
+
+				------------------------------------------------------------
 				-- POLL_READ
-				----------------------------------------------------------------
+				------------------------------------------------------------
 				if s_mc_cur.cmd_type = CMD_POLL_READ then
+					masked_v   := rsp_in.rsp_data AND mask_v;
 					expected_v := s_mc_cur.data AND mask_v;
 
 					if masked_v /= expected_v then
@@ -1203,29 +1227,25 @@ begin
 						retry_next_v := '0';
 					end if;
 
-				----------------------------------------------------------------
+				------------------------------------------------------------
 				-- POLL_TOGGLE
-				----------------------------------------------------------------
+				------------------------------------------------------------
 				elsif s_mc_cur.cmd_type = CMD_POLL_TOGGLE then
 
-					-- Prima lettura: cattura valore, retry forzato
+					masked_v := rsp_in.rsp_data AND mask_v;
+
 					if s_poll_retry_count = 0 then
 						retry_next_v := '1';
-
-					-- Dalla seconda lettura in poi: verifica toggle
 					elsif masked_v = s_poll_last_value then
-						retry_next_v := '1';   -- NON ha togglato
+						retry_next_v := '1';
 					else
-						retry_next_v := '0';   -- ha togglato → DONE
+						retry_next_v := '0';
 					end if;
 
-				----------------------------------------------------------------
-				-- POLL_PING
-				----------------------------------------------------------------
-				elsif s_mc_cur.cmd_type = CMD_POLL_PING then
-					retry_next_v := '0';       -- risposta OK → DONE
 				end if;
-			end if;
+
+			end if; -- s_ack_data_last
+
 		end if;
 
 		----------------------------------------------------------------
@@ -1234,9 +1254,29 @@ begin
 		s_poll_retry_next <= retry_next_v;
 	end process;
 
+	process(clk, resetn)
+	begin
+		if resetn = '0' then
+			s_poll_retry_reg <= '0';
+
+		elsif rising_edge(clk) then
+
+			-- cattura il retry nel ciclo dell’ULTIMO BEAT DATI
+			if s_ack_data_last = '1' then
+				s_poll_retry_reg <= s_poll_retry_next;
+			end if;
+
+			-- reset quando si esce dal POLL
+			if state_current /= exec_poll and
+			state_current /= exec_poll_wait then
+				s_poll_retry_reg <= '0';
+			end if;
+
+		end if;
+	end process;
 
 	--------------------------------------------------------------------
-	-- SINCRONO: registri POLL (versione AXI-like, con ACK centralizzato)
+	-- SINCRONO: registri POLL (versione universale corretta)
 	--------------------------------------------------------------------
 	process(clk, resetn)
 		variable mask_v     : std_logic_vector(C_DATA_WIDTH-1 downto 0);
@@ -1246,12 +1286,15 @@ begin
 	begin
 		if resetn = '0' then
 
-			s_poll_timeout      <= '0';
-			s_poll_value        <= (others => '0');
-			s_poll_masked_value <= (others => '0');
-			s_poll_last_value   <= (others => '0');
-			s_poll_retry_count  <= 0;
-			s_poll_delay_count  <= 0;
+			s_poll_retry_max      <= '0';
+			s_poll_value          <= (others => '0');
+			s_poll_masked_value   <= (others => '0');
+			s_poll_last_value     <= (others => '0');
+			s_poll_retry_count    <= 0;
+			s_poll_delay_count    <= 0;
+
+			s_poll_error          <= false;
+			s_poll_error_count    <= 0;
 
 		elsif rising_edge(clk) then
 
@@ -1260,7 +1303,6 @@ begin
 			----------------------------------------------------------------
 			if state_current = exec_poll then
 
-				-- Calcolo timeout
 				if s_mc_cur.timeout = 0 then
 					timeout_v := C_MAX_TIMEOUT;
 				else
@@ -1268,83 +1310,63 @@ begin
 				end if;
 
 				----------------------------------------------------------------
-				-- Gestione risposta AXI valida/completa (solo dati)
-				-- ⭐ usa s_ack_data al posto di ack ricostruito localmente
+				-- Risposta dati
 				----------------------------------------------------------------
 				if s_ack_data = '1' then
 
-					-- Valore letto grezzo
 					s_poll_value <= rsp_in.rsp_data;
 
-					-- Mask / expected / masked (READ/TOGGLE)
 					mask_v     := s_mc_cur.data_array(0);
 					expected_v := s_mc_cur.data AND mask_v;
 					masked_v   := rsp_in.rsp_data AND mask_v;
 
 					s_poll_masked_value <= masked_v;
 
-					------------------------------------------------------------
-					-- POLL_TOGGLE: gestione last_value
-					------------------------------------------------------------
 					if s_mc_cur.cmd_type = CMD_POLL_TOGGLE then
-						-- Prima lettura: cattura valore di riferimento
 						if s_poll_retry_count = 0 then
-							s_poll_last_value <= masked_v;
-
-						-- Dalla seconda lettura in poi:
-						-- aggiorno last_value solo quando esco (toggle rilevato)
-						elsif s_poll_retry_next = '0' then
 							s_poll_last_value <= masked_v;
 						end if;
 					end if;
-
-					----------------------------------------------------------------
-					-- Incremento retry_count (READ / TOGGLE / PING)
-					-- *** CORRETTO: incrementiamo SOLO quando retry_next = 1 ***
-					----------------------------------------------------------------
-					if s_mc_cur.cmd_type = CMD_POLL_TOGGLE then
-
-						-- Prima lettura: retry_count = 0 → incrementa
-						if s_poll_retry_count = 0 then
-							s_poll_retry_count <= s_poll_retry_count + 1;
-							s_poll_delay_count <= 0;
-
-						-- Dalla seconda lettura in poi: incrementa se retry_next = 1
-						elsif s_poll_retry_next = '1' then
-							s_poll_retry_count <= s_poll_retry_count + 1;
-							s_poll_delay_count <= 0;
-						end if;
-
-					else
-						-- READ / PING: incrementiamo sempre quando retry_next=1
-						if s_poll_retry_next = '1' then
-							s_poll_retry_count <= s_poll_retry_count + 1;
-							s_poll_delay_count <= 0;
-						end if;
-					end if;
-
-				end if; -- fine gestione risposta completa (dati)
+				end if;
 
 				----------------------------------------------------------------
-				-- Timeout (diverso per TOGGLE) + errore di execution
+				-- Incremento retry_count
+				----------------------------------------------------------------
+				if s_end_cmd = '1' then
+
+					-- EARLY (retry_next) oppure LATE (retry_reg)
+					if s_poll_retry_next = '1' or s_poll_retry_reg = '1' then
+						s_poll_retry_count <= s_poll_retry_count + 1;
+						s_poll_delay_count <= 0;
+					end if;
+
+					-- POLL_TOGGLE: aggiornamento last_value
+					if s_mc_cur.cmd_type = CMD_POLL_TOGGLE then
+						if (s_poll_retry_next = '0' and s_poll_retry_reg = '0') then
+							mask_v := s_mc_cur.data_array(0);
+							s_poll_last_value <= s_poll_value AND mask_v;
+						end if;
+					end if;
+
+				end if;
+
+				----------------------------------------------------------------
+				-- Timeout / MAX_RETRY
 				----------------------------------------------------------------
 				if s_mc_cur.cmd_type = CMD_POLL_TOGGLE then
-					-- timeout = retry_count > timeout_v → letture = timeout+1
 					if s_poll_retry_count > timeout_v then
-						-- segnala timeout solo la prima volta
-						if s_poll_timeout = '0' then
-							s_poll_timeout     <= '1';
-							s_poll_error       <= true;
-							s_poll_error_count <= s_poll_error_count + 1;
+						if s_poll_retry_max = '0' then
+							s_poll_retry_max     <= '1';
+							s_poll_error         <= true;
+							s_poll_error_count   <= s_poll_error_count + 1;
 						end if;
 					end if;
 				else
-					-- READ / PING: timeout = retry_count >= timeout_v → letture = timeout
 					if s_poll_retry_count >= timeout_v then
-						if s_poll_timeout = '0' then
-							s_poll_timeout     <= '1';
-							s_poll_error       <= true;
-							s_poll_error_count <= s_poll_error_count + 1;
+						if s_poll_retry_max = '0' then
+							s_poll_retry_max     <= '1';
+							s_poll_error         <= true;
+							s_poll_error_count   <= s_poll_error_count + 1;
 						end if;
 					end if;
 				end if;
@@ -1352,7 +1374,7 @@ begin
 			end if; -- exec_poll
 
 			----------------------------------------------------------------
-			-- EXEC_POLL_WAIT: gestione wait
+			-- EXEC_POLL_WAIT
 			----------------------------------------------------------------
 			if state_current = exec_poll_wait then
 				if s_poll_delay_count < s_mc_cur.wait_value then
@@ -1361,27 +1383,30 @@ begin
 			end if;
 
 			----------------------------------------------------------------
-			-- USCITA DAL POLL: reset registri
+			-- USCITA DAL POLL
 			----------------------------------------------------------------
 			if state_current /= exec_poll and
 			state_current /= exec_poll_wait then
 
-				s_poll_timeout      <= '0';
-				s_poll_value        <= (others => '0');
-				s_poll_masked_value <= (others => '0');
-				s_poll_last_value   <= (others => '0');
-				s_poll_retry_count  <= 0;
-				s_poll_delay_count  <= 0;
+				s_poll_retry_max      <= '0';
+				s_poll_value          <= (others => '0');
+				s_poll_masked_value   <= (others => '0');
+				s_poll_last_value     <= (others => '0');
+				s_poll_retry_count    <= 0;
+				s_poll_delay_count    <= 0;
 
+				s_poll_error          <= false;
 			end if;
 
 		end if;
 	end process;
 
 
+
 	--------------------------------------------------------------------
 	-- PROCESSO: LOGICA_SINCRONA_DATA_INDEX
-	-- Gestisce l'indice del beat per comandi multi‑beat (FIFO/BURST/WRAP)
+	-- Gestisce l'indice del beat per comandi multi‑beat (FIFO/BURST/WRAP/FILL/DUMP)
+	-- Versione universale: usa solo s_ack_data, s_ack_data_last, s_ack_err
 	--------------------------------------------------------------------
 	process(clk, resetn)
 	begin
@@ -1401,23 +1426,26 @@ begin
 
 				----------------------------------------------------------------
 				-- Beat di dato consumato (risposta normale)
-				-- ⭐ usa s_ack_data invece di rsp_valid/rsp_last
+				-- ⭐ usa s_ack_data_last invece di rsp_last
 				----------------------------------------------------------------
 				if s_ack_data = '1' then
-					if rsp_in.rsp_last = '0' then
+					if s_ack_data_last = '0' then
 						s_data_index <= s_data_index + 1;
 					else
-						s_data_index <= 0;
+						s_data_index <= 0;   -- ultimo beat → reset
 					end if;
 				end if;
 
-				----------------------------------------------------------------
-				-- Beat di errore consumato (sempre last)
-				-- ⭐ usa s_ack_err invece di rsp_err_valid
-				----------------------------------------------------------------
-				if s_ack_err = '1' then
-					s_data_index <= 0;
-				end if;
+			-- NON azzerare subito l’indice in caso di errore
+			-- Manteniamo s_data_index per poter stampare il beat corretto
+			-- Lo azzeriamo SOLO quando il comando è finito
+
+			----------------------------------------------------------------
+			-- Reset dell’indice SOLO quando il comando è finito
+			----------------------------------------------------------------
+			if s_end_cmd = '1' then
+				s_data_index <= 0;
+			end if;
 
 			----------------------------------------------------------------
 			-- Altri stati → reset dell’indice
@@ -1428,6 +1456,7 @@ begin
 
 		end if;
 	end process;
+
 
 	--------------------------------------------------------------------
 	-- PROCESSO: EXEC_DUMP_LOGIC
@@ -1452,7 +1481,7 @@ begin
 			s_dump_open        <= '0';
 			s_dump_tag         <= 0;
 
-			-- ⭐ reset errori dump
+			-- reset errori dump
 			s_dump_error       <= false;
 			s_dump_error_count <= 0;
 
@@ -1466,7 +1495,7 @@ begin
 			----------------------------------------------------------------
 			if state_current = exec_dump then
 
-				if s_data_index = 0 and s_dump_open = '0' then
+				if s_data_index = 0 and s_dump_open = '0' and s_ack_data = '1' then
 
 					-- DUMP_FILE → scrittura
 					if s_mc_cur.cmd_type = CMD_DUMP_FILE_LEN or
@@ -1515,7 +1544,7 @@ begin
 			-- HEADER stampato una sola volta
 			----------------------------------------------------------------
 			if state_current = exec_dump then
-				-- ⭐ header solo quando il primo beat è completo
+				-- header solo quando il primo beat è completo
 				if s_data_index = 0 and s_ack_data = '1' then
 
 					if s_mc_cur.cmd_type = CMD_DUMP_LEN or
@@ -1553,7 +1582,7 @@ begin
 			-- BEAT-BY-BEAT
 			----------------------------------------------------------------
 			if state_current = exec_dump then
-				-- ⭐ tutta la logica beat-by-beat è gated da s_ack_data
+				-- tutta la logica beat-by-beat è gated da s_ack_data
 				if s_ack_data = '1' then
 
 					----------------------------------------------------------------
@@ -1605,7 +1634,6 @@ begin
 						-- 2. Leggi una linea dal file
 						log_read(s_dump_tag, v_line);
 
-						-- Copia in stringa
 						for i in 1 to C_MAX_STRING loop
 							line_str(i) := v_line(i);
 						end loop;
@@ -1630,7 +1658,6 @@ begin
 								" exp_data=" & file_data_str
 							);
 
-							-- ⭐ errore di execution: indirizzo diverso
 							s_dump_error       <= true;
 							s_dump_error_count <= s_dump_error_count + 1;
 
@@ -1645,7 +1672,6 @@ begin
 								" exp_data=" & file_data_str
 							);
 
-							-- ⭐ errore di execution: dato diverso
 							s_dump_error       <= true;
 							s_dump_error_count <= s_dump_error_count + 1;
 
@@ -1669,8 +1695,8 @@ begin
 			-- Chiusura file DUMP
 			----------------------------------------------------------------
 			if state_current = exec_dump then
-				-- ⭐ chiusura solo quando ultimo beat dati è completo
-				if s_dump_open = '1' and s_ack_data = '1' and rsp_in.rsp_last = '1' then
+				-- chiusura solo quando il comando è terminato
+				if s_dump_open = '1' and s_end_cmd = '1' then
 					log_close(s_dump_tag);
 					s_dump_open <= '0';
 
@@ -1684,12 +1710,12 @@ begin
 						"DUMP FILE CLOSED: " & trim_string(s_mc_cur.filename) &
 						" (tag=" & integer'image(s_dump_tag) & ")"
 					);
-
 				end if;
 			end if;
 
 		end if;
 	end process;
+
 
 
 	--------------------------------------------------------------------
@@ -1713,6 +1739,7 @@ begin
 
 		variable timeout_v : integer;
 
+		variable mask_v     : t_data;
 		variable masked_v   : t_data;
 		variable expected_v : t_data;
 
@@ -1721,6 +1748,11 @@ begin
 
 		variable err_msg  : t_err_string;
 		variable err_flag : boolean;
+
+		variable exp_msg_long  : t_err_string;   -- 64 chars
+		variable exp_msg_short : string(1 to 24);
+		variable rcv_msg_long  : t_err_string;   -- 64 chars
+		variable rcv_msg_short : string(1 to 24);
 
 	begin
 		if resetn = '0' then
@@ -1792,6 +1824,29 @@ begin
 				-- BASE (READ / WRITE / CHECK) — versione AXI-like
 				----------------------------------------------------------------
 				when exec_base =>
+
+					----------------------------------------------------------------
+					-- ERRORE AXI: SOLO se s_ack_err = '1'
+					-- ⭐ usa decode_err() per msg + flag
+					----------------------------------------------------------------
+					if s_ack_err = '1' and s_mc_cur.cmd_type /= CMD_TEST_ERROR then
+
+						-- decodifica errore tramite tabella
+						decode_err(rsp_in.rsp_err_code, err_msg, err_flag);
+
+						-- stampa errore AXI con addr/beat reali dal controller
+						log_write(
+							s_log_tag,
+							"BASE AXI ERROR: addr=0x" & slv_to_hex(rsp_in.rsp_err_addr) &
+							" beat=" & integer'image(to_integer(unsigned(rsp_in.rsp_err_beat))) &
+							" code=0x" & slv_to_hex(rsp_in.rsp_err_code) &
+							" msg=" & err_msg
+						);
+
+						s_base_error       <= true;
+						s_base_error_count <= s_base_error_count + 1;
+
+					end if;
 
 					----------------------------------------------------------------
 					-- RISPOSTA NORMALE (solo quando il beat è completo)
@@ -1900,28 +1955,70 @@ begin
 
 					end if;  -- fine gestione s_ack_data
 
-
 					----------------------------------------------------------------
-					-- ERRORE AXI: SOLO se s_ack_err = '1'
-					-- ⭐ usa decode_err() per msg + flag
+					-- TEST_ERROR
 					----------------------------------------------------------------
-					if s_ack_err = '1' then
+					if s_mc_cur.cmd_type = CMD_TEST_ERROR then
+						if s_end_cmd = '1' then
 
-						-- decodifica errore tramite tabella
-						decode_err(rsp_in.rsp_err_code, err_msg, err_flag);
+							----------------------------------------------------------------
+							-- Decodifica messaggi expected e received
+							----------------------------------------------------------------
+							decode_err(s_mc_cur.err_code, exp_msg_long, err_flag);
+							exp_msg_short := exp_msg_long(1 to 24);
 
-						-- stampa errore AXI
-						log_write(
-							s_log_tag,
-							"AXI ERROR: addr=0x" & slv_to_hex(s_mc_cur.addr) &
-							" code=0x" & slv_to_hex(rsp_in.rsp_err_code) &
-							" msg=" & err_msg
-						);
+							decode_err(rsp_in.rsp_err_code, rcv_msg_long, err_flag);
+							rcv_msg_short := rcv_msg_long(1 to 24);
 
-						s_base_error       <= true;
-						s_base_error_count <= s_base_error_count + 1;
+							----------------------------------------------------------------
+							-- Riga principale (stile READ)
+							-- TEST_ERROR: addr=0xAAAA expected_err=0xEE msg_long_expected
+							----------------------------------------------------------------
+							log_write(
+								s_log_tag,
+								"TEST_ERROR: addr=0x" & slv_to_hex(s_mc_cur.addr) &
+								" err=0x" & slv_to_hex(s_mc_cur.err_code) &
+								" msg=" & exp_msg_long
+							);
 
+							----------------------------------------------------------------
+							-- Riga risultato (short messages)
+							----------------------------------------------------------------
+							if rsp_in.rsp_err_code = s_mc_cur.err_code then
+								----------------------------------------------------------------
+								-- MATCH → OK
+								----------------------------------------------------------------
+								log_write(
+									s_log_tag,
+									LOG_INDENT &
+									"err_rcv=0x" & slv_to_hex(rsp_in.rsp_err_code) &
+									" msg_rcv=" & rcv_msg_short &
+									" err_exp=0x" & slv_to_hex(s_mc_cur.err_code) &
+									" msg_exp=" & exp_msg_short &
+									" RESULT=OK"
+								);
+
+							else
+								----------------------------------------------------------------
+								-- MISMATCH → ERROR
+								----------------------------------------------------------------
+								log_write(
+									s_log_tag,
+									LOG_INDENT &
+									"err_rcv=0x" & slv_to_hex(rsp_in.rsp_err_code) &
+									" msg_rcv=" & rcv_msg_short &
+									" err_exp=0x" & slv_to_hex(s_mc_cur.err_code) &
+									" msg_exp=" & exp_msg_short &
+									" RESULT=ERROR"
+								);
+
+								s_test_error       <= true;
+								s_test_error_count <= s_test_error_count + 1;
+							end if;
+
+						end if;
 					end if;
+
 
 				when exec_stop =>
 					log_write(s_log_tag, "STOP: simulazione terminata su comando STOP");
@@ -1931,6 +2028,29 @@ begin
 				-- FIFO — versione AXI-like corretta
 				----------------------------------------------------------------
 				when exec_fifo =>
+
+					----------------------------------------------------------------
+					-- 2. ERRORE AXI: SOLO se s_ack_err = '1'
+					--    ⭐ usa decode_err() per msg + flag
+					----------------------------------------------------------------
+					if s_ack_err = '1' then
+
+						-- decodifica errore tramite tabella
+						decode_err(rsp_in.rsp_err_code, err_msg, err_flag);
+
+						-- stampa errore AXI
+						log_write(
+							s_log_tag,
+							"FIFO AXI ERROR: addr=0x" & slv_to_hex(rsp_in.rsp_err_addr) &
+							" beat=" & integer'image(to_integer(unsigned(rsp_in.rsp_err_beat))) &
+							" code=0x" & slv_to_hex(rsp_in.rsp_err_code) &
+							" msg=" & err_msg
+						);
+
+						s_fifo_error       <= true;
+						s_fifo_error_count <= s_fifo_error_count + 1;
+
+					end if;
 
 					----------------------------------------------------------------
 					-- 1. RISPOSTA NORMALE (solo quando il beat è completo)
@@ -2041,6 +2161,14 @@ begin
 					end if; -- fine gestione s_ack_data
 
 
+
+
+
+				----------------------------------------------------------------
+				-- BURST — versione AXI-like corretta
+				----------------------------------------------------------------
+				when exec_burst =>
+
 					----------------------------------------------------------------
 					-- 2. ERRORE AXI: SOLO se s_ack_err = '1'
 					--    ⭐ usa decode_err() per msg + flag
@@ -2053,23 +2181,16 @@ begin
 						-- stampa errore AXI
 						log_write(
 							s_log_tag,
-							"FIFO AXI ERROR: addr=0x" & slv_to_hex(s_mc_cur.addr) &
-							" beat=" & integer'image(s_data_index) &
+							"BURST AXI ERROR: addr=0x" & slv_to_hex(rsp_in.rsp_err_addr) &
+							" beat=" & integer'image(to_integer(unsigned(rsp_in.rsp_err_beat))) &
 							" code=0x" & slv_to_hex(rsp_in.rsp_err_code) &
 							" msg=" & err_msg
 						);
 
-						s_fifo_error       <= true;
-						s_fifo_error_count <= s_fifo_error_count + 1;
+						s_burst_error       <= true;
+						s_burst_error_count <= s_burst_error_count + 1;
 
 					end if;
-
-
-
-				----------------------------------------------------------------
-				-- BURST — versione AXI-like corretta
-				----------------------------------------------------------------
-				when exec_burst =>
 
 					----------------------------------------------------------------
 					-- 1. RISPOSTA NORMALE (solo quando il beat è completo)
@@ -2180,6 +2301,15 @@ begin
 					end if; -- fine gestione s_ack_data
 
 
+
+
+
+
+				----------------------------------------------------------------
+				-- WRAP — versione AXI-like corretta
+				----------------------------------------------------------------
+				when exec_wrap =>
+
 					----------------------------------------------------------------
 					-- 2. ERRORE AXI: SOLO se s_ack_err = '1'
 					--    ⭐ usa decode_err() per msg + flag
@@ -2192,24 +2322,17 @@ begin
 						-- stampa errore AXI
 						log_write(
 							s_log_tag,
-							"BURST AXI ERROR: addr=0x" & slv_to_hex(s_mc_cur.addr) &
-							" beat=" & integer'image(s_data_index) &
+							"WRAP AXI ERROR: addr=0x" & slv_to_hex(rsp_in.rsp_err_addr) &
+							" beat=" & integer'image(to_integer(unsigned(rsp_in.rsp_err_beat))) &
 							" code=0x" & slv_to_hex(rsp_in.rsp_err_code) &
 							" msg=" & err_msg
 						);
 
-						s_burst_error       <= true;
-						s_burst_error_count <= s_burst_error_count + 1;
+						s_wrap_error       <= true;
+						s_wrap_error_count <= s_wrap_error_count + 1;
 
 					end if;
 
-
-
-
-				----------------------------------------------------------------
-				-- WRAP — versione AXI-like corretta
-				----------------------------------------------------------------
-				when exec_wrap =>
 
 					----------------------------------------------------------------
 					-- 1. RISPOSTA NORMALE (solo quando il beat è completo)
@@ -2320,6 +2443,14 @@ begin
 					end if; -- fine gestione s_ack_data
 
 
+
+
+
+				----------------------------------------------------------------
+				-- FILL — versione AXI-like corretta
+				----------------------------------------------------------------
+				when exec_fill =>
+
 					----------------------------------------------------------------
 					-- 2. ERRORE AXI: SOLO se s_ack_err = '1'
 					--    ⭐ usa decode_err() per msg + flag
@@ -2329,27 +2460,18 @@ begin
 						-- decodifica errore tramite tabella
 						decode_err(rsp_in.rsp_err_code, err_msg, err_flag);
 
-						-- stampa errore AXI
 						log_write(
 							s_log_tag,
-							"WRAP AXI ERROR: addr=0x" & slv_to_hex(s_mc_cur.addr) &
-							" beat=" & integer'image(s_data_index) &
+							"FILL AXI ERROR: addr=0x" & slv_to_hex(rsp_in.rsp_err_addr) &
+							" beat=" & integer'image(to_integer(unsigned(rsp_in.rsp_err_beat))) &
 							" code=0x" & slv_to_hex(rsp_in.rsp_err_code) &
 							" msg=" & err_msg
 						);
 
-						s_wrap_error       <= true;
-						s_wrap_error_count <= s_wrap_error_count + 1;
+						s_fill_error       <= true;
+						s_fill_error_count <= s_fill_error_count + 1;
 
 					end if;
-
-
-
-
-				----------------------------------------------------------------
-				-- FILL — versione AXI-like corretta
-				----------------------------------------------------------------
-				when exec_fill =>
 
 					----------------------------------------------------------------
 					-- 1. RISPOSTA NORMALE (solo quando il beat è completo)
@@ -2441,38 +2563,35 @@ begin
 					end if; -- fine gestione s_ack_data
 
 
-					----------------------------------------------------------------
-					-- 2. ERRORE AXI: SOLO se s_ack_err = '1'
-					--    ⭐ usa decode_err() per msg + flag
-					----------------------------------------------------------------
-					if s_ack_err = '1' then
-
-						-- decodifica errore tramite tabella
-						decode_err(rsp_in.rsp_err_code, err_msg, err_flag);
-
-						log_write(
-							s_log_tag,
-							"FILL AXI ERROR: addr=0x" & slv_to_hex(s_mc_cur.addr) &
-							" beat=" & integer'image(s_data_index) &
-							" code=0x" & slv_to_hex(rsp_in.rsp_err_code) &
-							" msg=" & err_msg
-						);
-
-						s_fill_error       <= true;
-						s_fill_error_count <= s_fill_error_count + 1;
-
-					end if;
 
 
 
 
 				----------------------------------------------------------------
-				-- POLL (LOGGING) — versione AXI-like corretta
+				-- POLL (LOGGING) — versione corretta senza PING
 				----------------------------------------------------------------
 				when exec_poll =>
 
 					----------------------------------------------------------------
-					-- Calcolo timeout (solo per header)
+					-- AXI ERROR (READ / TOGGLE) → solo log, con addr/beat reali
+					----------------------------------------------------------------
+					if s_ack_err = '1' then
+
+						decode_err(rsp_in.rsp_err_code, err_msg, err_flag);
+
+						log_write(
+							s_log_tag,
+							LOG_INDENT &
+							"POLL AXI ERROR: addr=0x" & slv_to_hex(rsp_in.rsp_err_addr) &
+							" beat=" & integer'image(to_integer(unsigned(rsp_in.rsp_err_beat))) &
+							" code=0x" & slv_to_hex(rsp_in.rsp_err_code) &
+							" msg=" & err_msg
+						);
+					end if;
+
+
+					----------------------------------------------------------------
+					-- Calcolo MAX_RETRY
 					----------------------------------------------------------------
 					if s_mc_cur.timeout = 0 then
 						timeout_v := C_MAX_TIMEOUT;
@@ -2482,9 +2601,8 @@ begin
 
 					----------------------------------------------------------------
 					-- HEADER COMANDO POLL (una sola volta, al primo beat)
-					-- ⭐ usa s_ack_data invece di ack ricostruito
 					----------------------------------------------------------------
-					if s_ack_data = '1' and s_poll_retry_count = 0 then
+					if (s_ack_data = '1' or s_ack_err = '1') and s_poll_retry_count = 0 then
 
 						if s_mc_cur.cmd_type = CMD_POLL_READ then
 							log_write(
@@ -2493,7 +2611,7 @@ begin
 								" data=0x" & slv_to_hex(s_mc_cur.data) &
 								" mask=0x" & slv_to_hex(s_mc_cur.data_array(0)) &
 								" wait=" & integer'image(s_mc_cur.wait_value) &
-								" timeout=" & integer'image(timeout_v)
+								" max_retry=" & integer'image(timeout_v)
 							);
 
 						elsif s_mc_cur.cmd_type = CMD_POLL_TOGGLE then
@@ -2502,54 +2620,30 @@ begin
 								"POLL_TOGGLE: addr=0x" & slv_to_hex(s_mc_cur.addr) &
 								" mask=0x" & slv_to_hex(s_mc_cur.data_array(0)) &
 								" wait=" & integer'image(s_mc_cur.wait_value) &
-								" timeout=" & integer'image(timeout_v)
-							);
-
-						elsif s_mc_cur.cmd_type = CMD_POLL_PING then
-							log_write(
-								s_log_tag,
-								"POLL_PING: addr=0x" & slv_to_hex(s_mc_cur.addr) &
-								" wait=" & integer'image(s_mc_cur.wait_value) &
-								" timeout=" & integer'image(timeout_v)
+								" max_retry=" & integer'image(timeout_v)
 							);
 						end if;
 					end if;
 
 					----------------------------------------------------------------
-					-- AXI ERROR (READ / TOGGLE) → solo log
-					-- ⭐ usa decode_err()
-					----------------------------------------------------------------
-					if s_ack_err = '1' and s_mc_cur.cmd_type /= CMD_POLL_PING then
-
-						-- decodifica errore
-						decode_err(rsp_in.rsp_err_code, err_msg, err_flag);
-
-						log_write(
-							s_log_tag,
-							LOG_INDENT &
-							"AXI_ERROR: code=0x" & slv_to_hex(rsp_in.rsp_err_code) &
-							" msg=" & err_msg
-						);
-					end if;
-
-					----------------------------------------------------------------
-					-- POLL_READ: stampa RSP
-					-- ⭐ usa s_ack_data
+					-- POLL_READ: stampa RSP agganciata a s_ack_data
 					----------------------------------------------------------------
 					if s_ack_data = '1' and s_mc_cur.cmd_type = CMD_POLL_READ then
 
-						masked_v   := rsp_in.rsp_data AND s_mc_cur.data_array(0);
-						expected_v := s_mc_cur.data AND s_mc_cur.data_array(0);
+						mask_v     := s_mc_cur.data_array(0);
+						expected_v := s_mc_cur.data AND mask_v;
+						masked_v   := rsp_in.rsp_data AND mask_v;
 
-						if s_poll_timeout = '1' then
+						if s_poll_retry_max = '1' then
 							log_write(
 								s_log_tag,
 								LOG_INDENT &
 								"RSP: value=0x" & slv_to_hex(rsp_in.rsp_data) &
 								" masked=0x" & slv_to_hex(masked_v) &
 								" expected=0x" & slv_to_hex(expected_v) &
-								" TIMEOUT"
+								" MAX_RETRY"
 							);
+
 						elsif s_poll_retry_next = '1' then
 							log_write(
 								s_log_tag,
@@ -2559,6 +2653,7 @@ begin
 								" expected=0x" & slv_to_hex(expected_v) &
 								" RETRY"
 							);
+
 						else
 							log_write(
 								s_log_tag,
@@ -2572,22 +2667,32 @@ begin
 					end if;
 
 					----------------------------------------------------------------
-					-- POLL_TOGGLE: stampa RSP
-					-- ⭐ usa s_ack_data
+					-- POLL_TOGGLE: stampa RSP agganciata a s_ack_data
 					----------------------------------------------------------------
 					if s_ack_data = '1' and s_mc_cur.cmd_type = CMD_POLL_TOGGLE then
 
-						masked_v   := rsp_in.rsp_data AND s_mc_cur.data_array(0);
-						expected_v := s_poll_last_value AND s_mc_cur.data_array(0);
+						mask_v     := s_mc_cur.data_array(0);
+						expected_v := s_poll_last_value AND mask_v;
+						masked_v   := rsp_in.rsp_data AND mask_v;
 
-						if s_poll_timeout = '1' then
+						if s_poll_retry_count = 0 then
 							log_write(
 								s_log_tag,
 								LOG_INDENT &
 								"RSP: value=0x" & slv_to_hex(rsp_in.rsp_data) &
 								" masked=0x" & slv_to_hex(masked_v) &
-								" TIMEOUT"
+								" LOAD"
 							);
+
+						elsif s_poll_retry_max = '1' then
+							log_write(
+								s_log_tag,
+								LOG_INDENT &
+								"RSP: value=0x" & slv_to_hex(rsp_in.rsp_data) &
+								" masked=0x" & slv_to_hex(masked_v) &
+								" MAX_RETRY"
+							);
+
 						elsif s_poll_retry_next = '1' then
 							log_write(
 								s_log_tag,
@@ -2596,6 +2701,7 @@ begin
 								" masked=0x" & slv_to_hex(masked_v) &
 								" RETRY"
 							);
+
 						else
 							log_write(
 								s_log_tag,
@@ -2606,61 +2712,26 @@ begin
 							);
 						end if;
 					end if;
-
-					----------------------------------------------------------------
-					-- POLL_PING: periferica NON pronta
-					-- ⭐ usa s_ack_err
-					----------------------------------------------------------------
-					if s_ack_err = '1' and s_mc_cur.cmd_type = CMD_POLL_PING then
-
-						if s_poll_timeout = '1' then
-							log_write(
-								s_log_tag,
-								LOG_INDENT &
-								"RSP: Peripheral NOT ready (TIMEOUT)"
-							);
-						else
-							log_write(
-								s_log_tag,
-								LOG_INDENT &
-								"RSP: Peripheral NOT ready (RETRY)"
-							);
-						end if;
-					end if;
-
-					----------------------------------------------------------------
-					-- POLL_PING: periferica pronta
-					-- ⭐ usa s_ack_data
-					----------------------------------------------------------------
-					if s_ack_data = '1' and s_mc_cur.cmd_type = CMD_POLL_PING then
-						if s_poll_retry_next = '0' and s_poll_timeout = '0' then
-							log_write(
-								s_log_tag,
-								LOG_INDENT &
-								"RSP: Peripheral ready (DONE)"
-							);
-						end if;
-					end if;
-
-
 
 
 				----------------------------------------------------------------
 				-- FINISHED
 				----------------------------------------------------------------
 				when finished =>
+
 					----------------------------------------------------------------
 					-- CONSOLE SUMMARY
 					----------------------------------------------------------------
 					v_exec_errors :=
-						s_base_error_count
-						+ s_fifo_error_count
-						+ s_burst_error_count
-						+ s_wrap_error_count
-						+ s_fill_error_count
-						+ s_poll_error_count
-						+ s_dump_error_count
-						+ s_axi_error_count;
+						s_base_error_count +
+						s_fifo_error_count +
+						s_burst_error_count +
+						s_wrap_error_count +
+						s_fill_error_count +
+						s_poll_error_count +
+						s_dump_error_count +
+						s_axi_error_count +
+						s_test_error_count;   -- ⭐ aggiunto
 
 					v_total_errors := s_parse_error_count + v_exec_errors;
 
@@ -2675,6 +2746,7 @@ begin
 					report "  POLL errors:        " & integer'image(s_poll_error_count) severity note;
 					report "  DUMP errors:        " & integer'image(s_dump_error_count) severity note;
 					report "  AXI errors:         " & integer'image(s_axi_error_count) severity note;
+					report "  TEST_ERROR errors:  " & integer'image(s_test_error_count) severity note;  -- ⭐ aggiunto
 
 					report "  TOTAL EXEC ERRORS = " & integer'image(v_exec_errors) severity note;
 					report "  TOTAL ERRORS      = " & integer'image(v_total_errors) severity note;
@@ -2707,6 +2779,7 @@ begin
 						log_write(s_log_tag, "  POLL errors:        " & integer'image(s_poll_error_count));
 						log_write(s_log_tag, "  DUMP errors:        " & integer'image(s_dump_error_count));
 						log_write(s_log_tag, "  AXI errors:         " & integer'image(s_axi_error_count));
+						log_write(s_log_tag, "  TEST_ERROR errors:  " & integer'image(s_test_error_count));  -- ⭐ aggiunto
 
 						log_write(s_log_tag, "TOTAL EXEC ERRORS = " & integer'image(v_exec_errors));
 						s_exec_error_count <= v_exec_errors;
@@ -2745,31 +2818,13 @@ begin
 				-- OTHERS → AXI ERROR (solo logging)
 				----------------------------------------------------------------
 				when others =>
-					if s_log_open = '1' then
-						if rsp_in.rsp_err_valid = '1' then
-
-							-- decodifica errore tramite tabella
-							decode_err(rsp_in.rsp_err_code, err_msg, err_flag);
-
-							log_write(
-								s_log_tag,
-								"AXI_ERROR: id=" &
-								integer'image(to_integer(unsigned(rsp_in.rsp_err_id))) &
-								" code=0x" & slv_to_hex(rsp_in.rsp_err_code) &
-								" msg=" & err_msg
-							);
-
-							-- ⭐ errore execution
-							s_axi_error       <= true;
-							s_axi_error_count <= s_axi_error_count + 1;
-						end if;
-					end if;
+					null;
 
 			end case;
 
 		end if;
 	end process;
 
-
 end architecture;
+
 

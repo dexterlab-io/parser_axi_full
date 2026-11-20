@@ -7,7 +7,7 @@
 -- ======================================================================
 --  File: cmd_cmd_pkg.vhd
 --  Author: Dexter
---  Date: 2026-09-06
+--  Date: 2026-10-23
 --  Version: 1.0
 -- ======================================================================
 
@@ -66,7 +66,8 @@ package cmd_cmd_pkg is
 
         CMD_POLL_READ,
         CMD_POLL_TOGGLE,
-        CMD_POLL_PING,
+
+        CMD_TEST_ERROR,
 
         CMD_DUMP_LEN,
         CMD_DUMP_RANGE,
@@ -180,6 +181,7 @@ package cmd_cmd_pkg is
         param_kind   : t_param_kind_vec;
         atomic       : std_logic;
 		byte_enable  : natural;
+		err_code     : std_logic_vector(7 downto 0);
     end record;
 
     -- Vecchio array di tutti i comandi del file: non serve più
@@ -204,6 +206,7 @@ package cmd_cmd_pkg is
         print_text : t_line;
         filename   : t_line;
         byte_enable : natural;
+		err_code     : std_logic_vector(7 downto 0);
     end record;
 
     type t_mc_list is array(0 to C_MAX_MC-1) of t_mc_cmd;
@@ -222,7 +225,8 @@ package cmd_cmd_pkg is
         atomic     => '0',
         print_text => (others => ' '),
         filename   => (others => ' '),
-		byte_enable => 0
+		byte_enable => 0,
+		err_code => (others => '0')
     );
 
     --------------------------------------------------------------------
@@ -243,20 +247,21 @@ package cmd_cmd_pkg is
     -- RECORD INTERFACCIA AXI
     --------------------------------------------------------------------
     type t_cmd_out is record
-        cmd_write : std_logic;                     -- 1 = write, 0 = read
-        cmd_burst : std_logic;                     -- 1 = multi-beat
-        cmd_wrap  : std_logic;                     -- 1 = wrap addressing
-        cmd_fifo  : std_logic;                     -- 1 = fifo addressing
-        cmd_id    : unsigned(C_ID_WIDTH-1 downto 0);
-        cmd_addr  : std_logic_vector(C_ADDR_WIDTH-1 downto 0);
-        cmd_len   : natural range 0 to 256;
-        cmd_data  : t_data_array;
-        cmd_wstrb : std_logic_vector((C_DATA_WIDTH/8)-1 downto 0);
-        cmd_prot  : std_logic_vector(2 downto 0); -- AXI Protection Attributes (AWPROT/ARPROT) [0] privileged / non-privileged [1] secure / non-secure [2] instruction / data
-        cmd_size  : std_logic_vector(2 downto 0); -- AXI Size (AWSIZE/ARSIZE) = log2(bytes_per_beat)
-        cmd_lock  : std_logic;                    -- AXI Lock (AWLOCK/ARLOCK)
-        cmd_cache : std_logic_vector(3 downto 0); -- AXI Cache Attributes (AWCACHE/ARCACHE)
-        cmd_qos   : std_logic_vector(3 downto 0); -- AXI QoS Attributes (AWQOS/ARQOS)
+        cmd_write     : std_logic;                     -- 1 = write, 0 = read
+        cmd_burst     : std_logic;                     -- 1 = multi-beat
+        cmd_wrap      : std_logic;                     -- 1 = wrap addressing
+        cmd_fifo      : std_logic;                     -- 1 = fifo addressing
+        cmd_id        : unsigned(C_ID_WIDTH-1 downto 0);
+        cmd_addr      : std_logic_vector(C_ADDR_WIDTH-1 downto 0);
+        cmd_len       : natural range 0 to 256;
+        cmd_data      : t_data_array;
+        cmd_wstrb     : std_logic_vector((C_DATA_WIDTH/8)-1 downto 0);
+        cmd_prot      : std_logic_vector(2 downto 0); -- AXI Protection Attributes (AWPROT/ARPROT) [0] privileged / non-privileged [1] secure / non-secure [2] instruction / data
+        cmd_size      : std_logic_vector(2 downto 0); -- AXI Size (AWSIZE/ARSIZE) = log2(bytes_per_beat)
+        cmd_lock      : std_logic;                    -- AXI Lock (AWLOCK/ARLOCK)
+        cmd_cache     : std_logic_vector(3 downto 0); -- AXI Cache Attributes (AWCACHE/ARCACHE)
+        cmd_qos       : std_logic_vector(3 downto 0); -- AXI QoS Attributes (AWQOS/ARQOS)
+		cmd_err_code  : std_logic_vector(7 downto 0);
     end record;
 
 	type t_rsp_out is record
@@ -265,13 +270,15 @@ package cmd_cmd_pkg is
 	end record;
 
 	type t_rsp_in is record
+		rsp_end_cmd   : std_logic;
 		rsp_valid     : std_logic;
 		rsp_last      : std_logic;
 		rsp_data      : std_logic_vector(C_DATA_WIDTH-1 downto 0);
 		rsp_id        : std_logic_vector(C_ID_WIDTH-1 downto 0);
 		rsp_err_valid : std_logic;
 		rsp_err_code  : std_logic_vector(7 downto 0);
-		rsp_err_info  : std_logic_vector(31 downto 0);
+		rsp_err_addr  : std_logic_vector(C_ADDR_WIDTH-1 downto 0);
+		rsp_err_beat  : std_logic_vector(7 downto 0);
 		rsp_err_id    : std_logic_vector(C_ID_WIDTH-1 downto 0);
 	end record;
 
@@ -665,20 +672,6 @@ package cmd_cmd_pkg is
             is_burst        => false
         ),
 
-        CMD_POLL_PING => (
-            min_params      => 3,
-            max_params      => 3,
-            param_kinds     => (
-                1      => PK_ADDR,
-                2      => PK_LEN,
-                3      => PK_LEN,
-                others => PK_NONE
-            ),
-            needs_alignment => true,
-            is_wrap         => false,
-            is_burst        => false
-        ),
-
         ----------------------------------------------------------------
         -- DUMP_*
         ----------------------------------------------------------------
@@ -762,8 +755,24 @@ package cmd_cmd_pkg is
             needs_alignment => true,
             is_wrap         => false,
             is_burst        => true
-        )
-    );
+        ),
+
+		----------------------------------------------------------------
+		-- TEST_ERROR
+		----------------------------------------------------------------
+		CMD_TEST_ERROR => (
+			min_params      => 2,
+			max_params      => 2,
+			param_kinds     => (
+				1      => PK_ADDR,
+				2      => PK_DATA,
+				others => PK_NONE
+			),
+			needs_alignment => false,
+			is_wrap         => false,
+			is_burst        => false
+		)
+			);
 
 end package cmd_cmd_pkg;
 
@@ -855,8 +864,6 @@ package body cmd_cmd_pkg is
             return CMD_POLL_READ;
         elsif line_starts_with(tmp_line, "POLL_TOGGLE") then
             return CMD_POLL_TOGGLE;
-        elsif line_starts_with(tmp_line, "POLL_PING") then
-            return CMD_POLL_PING;
 
         elsif line_starts_with(tmp_line, "DUMP_LEN") then
             return CMD_DUMP_LEN;
@@ -870,6 +877,10 @@ package body cmd_cmd_pkg is
             return CMD_DUMP_FILE_CHECK_LEN;
         elsif line_starts_with(tmp_line, "DUMP_FILE_CHECK_RANGE") then
             return CMD_DUMP_FILE_CHECK_RANGE;
+
+        elsif line_starts_with(tmp_line, "TEST_ERROR") then
+            return CMD_TEST_ERROR;
+
         end if;
 
         return CMD_UNKNOWN;

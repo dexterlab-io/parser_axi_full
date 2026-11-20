@@ -7,7 +7,7 @@
 -- ======================================================================
 --  File: cmd_map_pkg.vhd
 --  Author: Dexter
---  Date: 2026-09-06
+--  Date: 2026-10-19
 --  Version: 1.0
 -- ======================================================================
 
@@ -28,47 +28,50 @@ end package cmd_map_pkg;
 
 package body cmd_map_pkg is
 
-    function cmd_to_int(c : t_command) return integer is
-    begin
-        case c is
-            when CMD_READ              => return 1;
-            when CMD_WRITE             => return 2;
-            when CMD_CHECK             => return 3;
-            when CMD_BURST_READ        => return 4;
-            when CMD_BURST_WRITE       => return 5;
-            when CMD_BURST_CHECK       => return 6;
-            when CMD_WRAP_READ         => return 7;
-            when CMD_WRAP_WRITE        => return 8;
-            when CMD_WRAP_CHECK        => return 9;
-            when CMD_FILL_LEN          => return 10;
-            when CMD_FILL_RANGE        => return 11;
-            when CMD_FILL_CHECK        => return 12;
-            when CMD_FIFO_READ         => return 13;
-            when CMD_FIFO_WRITE        => return 14;
-            when CMD_FIFO_CHECK        => return 15;
-            when CMD_WAIT_TIME         => return 16;
-            when CMD_WAIT_CLOCKS       => return 17;
-            when CMD_WAIT_SIM_TIME     => return 18;
-            when CMD_PRINT             => return 19;
-            when CMD_POLL_READ         => return 20;
-            when CMD_POLL_TOGGLE       => return 21;
-            when CMD_POLL_PING         => return 22;
-            when CMD_DUMP_LEN          => return 23;
-            when CMD_DUMP_RANGE        => return 24;
-            when CMD_DUMP_FILE_LEN     => return 25;
-            when CMD_DUMP_FILE_RANGE   => return 26;
-            when CMD_DUMP_FILE_CHECK_LEN   => return 27;
-            when CMD_DUMP_FILE_CHECK_RANGE => return 28;
-            when CMD_SET_VAR           => return 29;
-            when CMD_SET_ATOMIC        => return 30;
-            when CMD_INCLUDE           => return 31;
-            when CMD_END_SIM           => return 32;
-            when CMD_STOP              => return 33;
-            when CMD_WSTRB_WRITE       => return 34;
-            when CMD_NOP               => return 35;
-            when others                => return 0;
-        end case;
-    end function;
+	function cmd_to_int(c : t_command) return integer is
+	begin
+		case c is
+			when CMD_READ              => return 1;
+			when CMD_WRITE             => return 2;
+			when CMD_CHECK             => return 3;
+			when CMD_BURST_READ        => return 4;
+			when CMD_BURST_WRITE       => return 5;
+			when CMD_BURST_CHECK       => return 6;
+			when CMD_WRAP_READ         => return 7;
+			when CMD_WRAP_WRITE        => return 8;
+			when CMD_WRAP_CHECK        => return 9;
+			when CMD_FILL_LEN          => return 10;
+			when CMD_FILL_RANGE        => return 11;
+			when CMD_FILL_CHECK        => return 12;
+			when CMD_FIFO_READ         => return 13;
+			when CMD_FIFO_WRITE        => return 14;
+			when CMD_FIFO_CHECK        => return 15;
+			when CMD_WAIT_TIME         => return 16;
+			when CMD_WAIT_CLOCKS       => return 17;
+			when CMD_WAIT_SIM_TIME     => return 18;
+			when CMD_PRINT             => return 19;
+			when CMD_POLL_READ         => return 20;
+			when CMD_POLL_TOGGLE       => return 21;
+			when CMD_DUMP_LEN          => return 23;
+			when CMD_DUMP_RANGE        => return 24;
+			when CMD_DUMP_FILE_LEN     => return 25;
+			when CMD_DUMP_FILE_RANGE   => return 26;
+			when CMD_DUMP_FILE_CHECK_LEN   => return 27;
+			when CMD_DUMP_FILE_CHECK_RANGE => return 28;
+			when CMD_SET_VAR           => return 29;
+			when CMD_SET_ATOMIC        => return 30;
+			when CMD_INCLUDE           => return 31;
+			when CMD_END_SIM           => return 32;
+			when CMD_STOP              => return 33;
+			when CMD_WSTRB_WRITE       => return 34;
+			when CMD_NOP               => return 35;
+
+			-- ⭐ Nuovo comando
+			when CMD_TEST_ERROR        => return 36;
+
+			when others                => return 0;
+		end case;
+	end function;
 
     function cmd_to_slv(c : t_command) return std_logic_vector is
     begin
@@ -106,7 +109,6 @@ package body cmd_map_pkg is
 
 			when CMD_POLL_READ           => return "POLL_READ";
 			when CMD_POLL_TOGGLE         => return "POLL_TOGGLE";
-			when CMD_POLL_PING           => return "POLL_PING";
 
 			when CMD_DUMP_LEN            => return "DUMP_LEN";
 			when CMD_DUMP_RANGE          => return "DUMP_RANGE";
@@ -121,12 +123,16 @@ package body cmd_map_pkg is
 			when CMD_INCLUDE             => return "INCLUDE";
 			when CMD_END_SIM             => return "END_SIM";
 
-            when CMD_STOP                => return "STOP";
-            when CMD_WSTRB_WRITE         => return "WSTRB_WRITE";
-            when CMD_NOP                 => return "NOP";
+			when CMD_STOP                => return "STOP";
+			when CMD_WSTRB_WRITE         => return "WSTRB_WRITE";
+			when CMD_NOP                 => return "NOP";
+
+			-- ⭐ Nuovo comando
+			when CMD_TEST_ERROR          => return "TEST_ERROR";
 
 			when others                  => return "UNKNOWN";
 		end case;
 	end function;
+
 
 end package body cmd_map_pkg;
